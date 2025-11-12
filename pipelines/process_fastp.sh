@@ -44,7 +44,6 @@ for R1 in "${R1_FILES[@]}"; do
         --html "$html" \
         --json "$json" \
         --report_title "$sample Fastp Report" \
-        --dont_overwrite \
         &> "$log"
 done
 
