@@ -2,15 +2,22 @@
 # Rocky Linux 8.10
 # Crea entorno compartido "/opt/conda/envs/preproc" con:
 # fastqc multiqc fastp cutadapt trimmomatic (java 11)
+# También descarga clasificador Silva 138 para QIIME2
 
 set -euo pipefail
 
-# variables
+# Variables
 CONDA_DIR="/opt/conda"
 ENV_NAME="preproc"
 ENV_PATH="${CONDA_DIR}/envs/${ENV_NAME}"
 GROUP_NAME="research"
 
+# Clasificador Silva
+SILVA_DIR="/home/proyecto/qiime2_results/taxonomy"
+SILVA_QZA="${SILVA_DIR}/silva-138-99-nb-classifier.qza"
+SILVA_URL="https://data.qiime2.org/classifiers/sklearn-1.4.2/silva/silva-138-99-nb-classifier.qza"
+
+# Paquetes a instalar
 PKGS=(
   "python=3.11"
   "fastqc"
@@ -21,7 +28,7 @@ PKGS=(
   "openjdk=11"
 )
 
-# functions
+# Funciones
 msg(){ echo -e "\n[INFO] $*"; }
 err(){ echo -e "\n[ERROR] $*" >&2; exit 1; }
 
@@ -32,9 +39,7 @@ require_root(){
 }
 
 check_prereqs(){
-  # conda
   [[ -x "${CONDA_DIR}/bin/conda" ]] || err "No se encontró conda en ${CONDA_DIR}. Instala Miniconda global primero."
-  # cargar funciones conda
   if [[ -f /etc/profile.d/conda.sh ]]; then
     source /etc/profile.d/conda.sh
   else
@@ -72,9 +77,21 @@ set_permissions(){
   setfacl -R -d -m g:${GROUP_NAME}:rwx "${ENV_PATH}"
 }
 
+install_silva_classifier(){
+  msg "Verificando clasificador Silva en ${SILVA_QZA}…"
+  if [[ -f "${SILVA_QZA}" ]]; then
+    msg "Clasificador Silva ya existe. Saltando descarga."
+    return
+  fi
+
+  msg "Descargando clasificador Silva 138 desde QIIME2…"
+  mkdir -p "${SILVA_DIR}"
+  wget -O "${SILVA_QZA}" "${SILVA_URL}" || err "Fallo la descarga del clasificador Silva."
+  msg "Clasificador Silva descargado exitosamente."
+}
+
 verify(){
   msg "Verificando herramientas en el entorno ${ENV_NAME}…"
-  # shellcheck disable=SC1091
   source /etc/profile.d/conda.sh 2>/dev/null || true
   conda activate "${ENV_NAME}"
 
@@ -85,6 +102,7 @@ verify(){
   trimmomatic -version || trimmomatic 2>&1 | head -n 5 || true
 
   conda deactivate
+
   echo
   echo "=== OK: entorno '${ENV_NAME}' listo ==="
   echo "Ubicación: ${ENV_PATH}"
@@ -100,8 +118,8 @@ main(){
   set_channel_priority
   create_env
   set_permissions
+  install_silva_classifier
   verify
 }
 
 main "$@"
-
