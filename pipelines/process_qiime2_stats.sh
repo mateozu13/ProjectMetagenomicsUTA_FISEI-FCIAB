@@ -59,7 +59,7 @@ run_dada2() {
   import_sequences "$group"
 
   local cmd="
-qiime dada2 denoise-paired \
+  qiime dada2 denoise-paired \
   --i-demultiplexed-seqs $group_dir/demux-paired.qza \
   --p-trim-left-f 0 \
   --p-trim-left-r 0 \
@@ -147,6 +147,7 @@ run_diversity() {
 
 # ========= EJECUCIÓN =========
 for group in "${GROUPS[@]}"; do
+  import_sequences "$group"
   run_dada2 "$group"
   run_taxonomy "$group"
   run_phylogeny "$group"
