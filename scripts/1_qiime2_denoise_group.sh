@@ -4,6 +4,8 @@
 # Cada salida se almacena en: /home/proyecto/qiime2_results/dada2/{Grupo}/
 # Usa entorno conda "qiime2"
 
+export TMPDIR="/mnt/qiime2_tmp"
+
 set -euo pipefail
 
 # Activar entorno

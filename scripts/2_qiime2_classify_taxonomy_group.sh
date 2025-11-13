@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Clasificación taxonómica con SILVA para cada grupo por separado
 
+export TMPDIR="/mnt/qiime2_tmp"
+
 set -euo pipefail
 source /opt/conda/etc/profile.d/conda.sh
 conda activate qiime2

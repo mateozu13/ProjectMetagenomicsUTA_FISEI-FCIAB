@@ -1,6 +1,8 @@
 #!/bin/bash
 # Preprocesamiento con fastp usando 12 hilos y MultiQC por grupo
 
+export TMPDIR="/mnt/qiime2_tmp"
+
 set -euo pipefail
 
 # Rutas

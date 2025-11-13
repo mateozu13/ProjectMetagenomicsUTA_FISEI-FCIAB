@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Script para análisis de diversidad COMPARATIVO entre todos los grupos
 
+export TMPDIR="/mnt/qiime2_tmp"
+
 set -euo pipefail
 source /opt/conda/etc/profile.d/conda.sh
 conda activate qiime2

@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Construcción de árboles filogenéticos por grupo (Colitis, Crohn, Control)
 
+export TMPDIR="/mnt/qiime2_tmp"
+
 set -euo pipefail
 source /opt/conda/etc/profile.d/conda.sh
 conda activate qiime2
