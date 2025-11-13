@@ -95,6 +95,12 @@ for GROUP in "${groups[@]}"; do
     --o-table "$TABLE_QZA" \
     --o-representative-sequences "$REPSEQS_QZA" \
     --o-denoising-stats "$STATS_QZA"
+
+  # visualización denoising-stats
+  # qiime metadata tabulate \
+  #   --m-input-file denoising-stats.qza \
+  #   --o-visualization denoising-stats.qzv
+
   
   # d. Clasificación taxonómica de secuencias representativas con el clasificador pre-entrenado
   TAXONOMY_QZA="$BASE_OUTPUT/taxonomy/$GROUP/taxonomy-${GROUP}.qza"

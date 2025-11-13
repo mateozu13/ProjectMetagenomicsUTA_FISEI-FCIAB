@@ -8,7 +8,8 @@ conda activate qiime2
 CLASSIFIER="/home/proyecto/qiime2_results/taxonomy/silva-138-99-nb-classifier.qza"
 BASE_DADA2="/home/proyecto/qiime2_results/dada2"
 OUT_TAX="/home/proyecto/qiime2_results/taxonomy"
-NJOBS=12
+NJOBS=6 # probar con 8 - 10 
+# con 12 nucleos no funciona por el consumo total de RAM
 
 # Verificar que el clasificador exista
 if [[ ! -f "$CLASSIFIER" ]]; then
