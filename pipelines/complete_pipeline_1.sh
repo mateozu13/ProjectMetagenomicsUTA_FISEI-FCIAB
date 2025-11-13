@@ -97,6 +97,17 @@ if [[ $# -lt 1 ]]; then
   echo "  bash $0 Proyecto1_20241113"
   echo "  bash $0 Proyecto1_20241113 custom_config.sh"
   echo ""
+  echo "ARCHIVO DE CONFIGURACIÓN PERSONALIZADA (opcional):"
+  echo "  El segundo parámetro permite sobrescribir los parámetros por defecto"
+  echo "  sin modificar el script principal. Útil para probar diferentes"
+  echo "  configuraciones de DADA2 o fastp."
+  echo ""
+  echo "  Ejemplo de custom_config.sh:"
+  echo "    DADA2_TRUNC_LEN_F=250"
+  echo "    DADA2_TRUNC_LEN_R=230"
+  echo "    SAMPLING_DEPTH=8000"
+  echo "    FASTP_QUALITY_PHRED=25"
+  echo ""
   exit 1
 fi
 
@@ -151,7 +162,10 @@ fi
 
 # Detectar grupos automáticamente
 echo "Detectando grupos de muestras..."
-GRUPOS=($(find "$RAW_DIR" -mindepth 1 -maxdepth 1 -type d -exec basename {} \; | sort))
+GRUPOS=()
+while IFS= read -r dir; do
+  GRUPOS+=("$(basename "$dir")")
+done < <(find "$RAW_DIR" -mindepth 1 -maxdepth 1 -type d | sort)
 
 if [[ ${#GRUPOS[@]} -eq 0 ]]; then
   echo "ERROR: No se encontraron subdirectorios en raw_sequences/"
@@ -172,45 +186,44 @@ mkdir -p "$QIIME_DIR"
 mkdir -p "$RESULTS_DIR"
 
 # ============================================================================
-# GENERAR METADATA AUTOMÁTICAMENTE
+# GENERAR METADATA AUTOMÁTICAMENTE (CON VERIFICACIÓN PREVIA)
 # ============================================================================
 
 echo "=========================================="
-echo "Generando archivo metadata.tsv..."
+echo "Verificando archivo metadata.tsv..."
 echo "=========================================="
 
-# Crear encabezado
-echo -e "#SampleID\tGroup" > "$METADATA_FILE"
-
-# Contador de muestras
-TOTAL_SAMPLES=0
-
-# Recorrer cada grupo y extraer sample IDs
-for GRUPO in "${GRUPOS[@]}"; do
-  GRUPO_RAW="$RAW_DIR/$GRUPO"
+# Verificar si ya existe metadata.tsv
+if [[ -f "$METADATA_FILE" ]]; then
+  echo "ADVERTENCIA: Ya existe un archivo metadata.tsv"
+  echo ""
+  cat "$METADATA_FILE"
+  # echo ""
+  # read -p "¿Desea sobrescribir el metadata existente? (s/N): " -n 1 -r
+  # echo ""
   
-  # Buscar archivos _1.fq.gz y extraer sample ID
-  for fq1 in "$GRUPO_RAW"/*_1.fq.gz; do
-    if [[ -f "$fq1" ]]; then
-      basename_fq=$(basename "$fq1")
-      sample_id="${basename_fq%_1.fq.gz}"
-      
-      echo -e "${sample_id}\t${GRUPO}" >> "$METADATA_FILE"
-      ((TOTAL_SAMPLES++))
-    fi
-  done
-done
+  # if [[ ! $REPLY =~ ^[Ss]$ ]]; then
+  #   echo "✓ Conservando metadata.tsv existente"
+  #   echo ""
+  # else
+  #   echo "Regenerando metadata.tsv..."
+  #   rm "$METADATA_FILE"
+  # fi
+fi
 
-# Mostrar metadata generado
-echo "Archivo metadata.tsv generado con $TOTAL_SAMPLES muestras:"
+# Generar metadata solo si no existe o fue eliminado
+
+# Mostrar metadata final
 echo ""
+echo "Contenido de metadata.tsv:"
+echo "-------------------------"
 cat "$METADATA_FILE"
 echo ""
 
-if [[ $TOTAL_SAMPLES -eq 0 ]]; then
-  echo "ERROR: No se encontraron archivos *_1.fq.gz en raw_sequences/"
-  exit 1
-fi
+# Contar muestras del metadata
+TOTAL_SAMPLES=$(grep -v "^#SampleID" "$METADATA_FILE" | wc -l)
+echo "Total de muestras en metadata: $TOTAL_SAMPLES"
+echo ""
 
 # ============================================================================
 # PASO 1: PREPROCESAMIENTO CON FASTP
@@ -231,7 +244,7 @@ for GRUPO in "${GRUPOS[@]}"; do
   mkdir -p "$GRUPO_PREPROC"
   
   # Procesar cada par de archivos
-  for fq1 in "$GRUPO_RAW"/*_1.fq.gz; do
+  while IFS= read -r fq1; do
     if [[ ! -f "$fq1" ]]; then
       continue
     fi
@@ -240,7 +253,7 @@ for GRUPO in "${GRUPOS[@]}"; do
     fq2="${fq1/_1.fq.gz/_2.fq.gz}"
     
     if [[ ! -f "$fq2" ]]; then
-      echo "  ⚠ ADVERTENCIA: No se encontró el par reverse para $(basename $fq1)"
+      echo "  ⚠️  ADVERTENCIA: No se encontró el par reverse para $(basename "$fq1")"
       continue
     fi
     
@@ -293,9 +306,9 @@ for GRUPO in "${GRUPOS[@]}"; do
       reads_after=$(grep "total reads:" "$log_file" | tail -1 | awk '{print $3}')
       echo "    Reads antes: $reads_before → después: $reads_after"
     else
-      echo "    ⚠ ERROR en fastp para $basename_fq"
+      echo "    ⚠️  ERROR en fastp para $basename_fq"
     fi
-  done
+  done < <(find "$GRUPO_RAW" -maxdepth 1 -name "*_1.fq.gz" -type f)
   
   echo "  ✓ Grupo $GRUPO completado"
   echo ""
@@ -303,7 +316,7 @@ done
 
 # Generar reporte MultiQC
 echo "Generando reporte consolidado con MultiQC..."
-$MULTIQC_RUN "$PREPROC_DIR" -o "$PREPROC_DIR/multiqc_report" -n multiqc_fastp_report --force 2>/dev/null || echo "  ⚠ MultiQC no disponible o falló"
+$MULTIQC_RUN "$PREPROC_DIR" -o "$PREPROC_DIR/multiqc_report" -n multiqc_fastp_report --force 2>/dev/null || echo "  ⚠️  MultiQC no disponible o falló"
 
 echo ""
 echo "✓ Preprocesamiento completado para todos los grupos"
@@ -336,19 +349,23 @@ for GRUPO in "${GRUPOS[@]}"; do
   
   # Crear manifest
   echo -e "sample-id\tforward-absolute-filepath\treverse-absolute-filepath" > "$MANIFEST"
-  for f in "$GRUPO_INPUT"/*_filtered_1.fq.gz; do
-    if [[ ! -f "$f" ]]; then
-      continue
+  
+  while IFS= read -r f; do
+    if [[ -f "$f" ]]; then
+      id=$(basename "$f" | sed 's/_filtered_1\.fq\.gz$//')
+      rev="${f/_filtered_1/_filtered_2}"
+      echo -e "$id\t$f\t$rev" >> "$MANIFEST"
     fi
-    
-    id=$(basename "$f" | sed 's/_filtered_1\.fq\.gz$//')
-    rev="${f/_filtered_1/_filtered_2}"
-    echo -e "$id\t$f\t$rev" >> "$MANIFEST"
-  done
+  done < <(find "$GRUPO_INPUT" -maxdepth 1 -name "*_filtered_1.fq.gz" -type f)
   
   # Contar muestras
   NUM_SAMPLES=$(grep -v "^sample-id" "$MANIFEST" | wc -l)
   echo "  Muestras en manifest: $NUM_SAMPLES"
+  
+  if [[ $NUM_SAMPLES -eq 0 ]]; then
+    echo "  ⚠️  ADVERTENCIA: No se encontraron muestras para $GRUPO"
+    continue
+  fi
   
   # Importar datos
   echo "  Importando datos a QIIME2..."
@@ -409,6 +426,12 @@ for GRUPO in "${GRUPOS[@]}"; do
   GRUPO_OUT="$BASE_PHYLO/$GRUPO"
   mkdir -p "$GRUPO_OUT"
   
+  # Verificar que existe el archivo de secuencias
+  if [[ ! -f "$BASE_DADA2/$GRUPO/rep-seqs.qza" ]]; then
+    echo "  ⚠️  ADVERTENCIA: No se encontró rep-seqs.qza para $GRUPO"
+    continue
+  fi
+  
   $CONDA_RUN qiime phylogeny align-to-tree-mafft-fasttree \
     --i-sequences "$BASE_DADA2/$GRUPO/rep-seqs.qza" \
     --p-n-threads $PHYLO_THREADS \
@@ -448,7 +471,9 @@ echo "Paso 4.1: Combinando tablas de feature..."
 
 MERGE_TABLES_CMD="$CONDA_RUN qiime feature-table merge"
 for GRUPO in "${GRUPOS[@]}"; do
-  MERGE_TABLES_CMD="$MERGE_TABLES_CMD --i-tables $BASE_DADA2/$GRUPO/table.qza"
+  if [[ -f "$BASE_DADA2/$GRUPO/table.qza" ]]; then
+    MERGE_TABLES_CMD="$MERGE_TABLES_CMD --i-tables $BASE_DADA2/$GRUPO/table.qza"
+  fi
 done
 MERGE_TABLES_CMD="$MERGE_TABLES_CMD --o-merged-table $COMBINED_OUT/merged_table.qza"
 
@@ -462,7 +487,9 @@ echo "Paso 4.2: Combinando secuencias representativas..."
 
 MERGE_SEQS_CMD="$CONDA_RUN qiime feature-table merge-seqs"
 for GRUPO in "${GRUPOS[@]}"; do
-  MERGE_SEQS_CMD="$MERGE_SEQS_CMD --i-data $BASE_DADA2/$GRUPO/rep-seqs.qza"
+  if [[ -f "$BASE_DADA2/$GRUPO/rep-seqs.qza" ]]; then
+    MERGE_SEQS_CMD="$MERGE_SEQS_CMD --i-data $BASE_DADA2/$GRUPO/rep-seqs.qza"
+  fi
 done
 MERGE_SEQS_CMD="$MERGE_SEQS_CMD --o-merged-data $COMBINED_OUT/merged_rep-seqs.qza"
 
@@ -573,7 +600,7 @@ done
 
 # Copiar todos los archivos .qzv de análisis de diversidad
 echo "Copiando archivos de análisis de diversidad..."
-find "$COMBINED_OUT/results" -name "*.qzv" -exec cp {} "$RESULTS_DIR/" \;
+find "$COMBINED_OUT/results" -name "*.qzv" -exec cp {} "$RESULTS_DIR/" \; 2>/dev/null || true
 
 # Contar archivos copiados
 NUM_QZV=$(ls -1 "$RESULTS_DIR"/*.qzv 2>/dev/null | wc -l)
@@ -582,7 +609,7 @@ echo "  ✓ $NUM_QZV visualizaciones copiadas a results/"
 # Listar archivos finales
 echo ""
 echo "Visualizaciones disponibles en $RESULTS_DIR:"
-ls -1 "$RESULTS_DIR"/*.qzv | xargs -n 1 basename | sort
+ls -1 "$RESULTS_DIR"/*.qzv 2>/dev/null | xargs -n 1 basename | sort || echo "  (Ninguna visualización generada)"
 
 echo ""
 
@@ -621,9 +648,15 @@ echo "2. Visualizar resultados en: https://view.qiime2.org"
 echo "   → Subir archivos .qzv desde: $RESULTS_DIR/"
 echo ""
 echo "3. Si necesitas ajustar parámetros, crea un archivo de configuración:"
-echo "   → Copia la sección CONFIGURACIÓN de este script"
-echo "   → Guárdalo como custom_config.sh"
-echo "   → Ejecuta: bash $0 $PROJECT_NAME custom_config.sh"
+echo "   → Ejemplo: crear custom_config.sh con:"
+echo ""
+echo "     # custom_config.sh"
+echo "     DADA2_TRUNC_LEN_F=250"
+echo "     DADA2_TRUNC_LEN_R=230"
+echo "     SAMPLING_DEPTH=8000"
+echo "     FASTP_QUALITY_PHRED=25"
+echo ""
+echo "   → Luego ejecuta: bash $0 $PROJECT_NAME custom_config.sh"
 echo ""
 echo "Archivos clave:"
 echo "  - Metadata: $METADATA_FILE"
