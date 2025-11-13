@@ -3,7 +3,7 @@
 # Generador de gráficos de rendimiento para pipeline QIIME2
 # Crea visualizaciones interactivas en HTML usando Python/Plotly
 # 
-# Uso: bash generate_performance_plots.sh <nombre_proyecto>
+# Uso: bash generate_plots.sh <nombre_proyecto>
 ################################################################################
 
 set -euo pipefail
