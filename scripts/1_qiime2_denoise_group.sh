@@ -8,10 +8,6 @@ export TMPDIR="/mnt/qiime2_tmp"
 
 set -euo pipefail
 
-# Activar entorno
-source /opt/conda/etc/profile.d/conda.sh
-conda activate qiime2
-
 # Variables comunes
 BASE_INPUT=/home/proyecto/preproc
 BASE_OUT=/home/proyecto/qiime2_results/dada2
@@ -20,6 +16,12 @@ TRIM_LEFT_R=0
 TRUNC_LEN_F=230
 TRUNC_LEN_R=220
 THREADS=2
+CONDA_BASE="/opt/conda/bin/conda"
+CONDA="/opt/conda/bin/conda run -n qiime2"
+
+# Activar entorno
+source /opt/conda/etc/profile.d/conda.sh
+$CONDA_BASE activate qiime2
 
 # Función para procesar un grupo
 denoise_grupo() {
@@ -41,14 +43,14 @@ denoise_grupo() {
   done
 
   # Importar
-  qiime tools import \
+  $CONDA qiime tools import \
     --type 'SampleData[PairedEndSequencesWithQuality]' \
     --input-path "$MANIFEST" \
     --output-path "$DEMUX" \
     --input-format PairedEndFastqManifestPhred33V2
 
   # Denoising
-  qiime dada2 denoise-paired \
+  $CONDA qiime dada2 denoise-paired \
     --i-demultiplexed-seqs "$DEMUX" \
     --p-trim-left-f $TRIM_LEFT_F \
     --p-trim-left-r $TRIM_LEFT_R \
@@ -69,6 +71,6 @@ denoise_grupo "Colitis"
 denoise_grupo "Crohn"
 denoise_grupo "Control"
 
-conda deactivate
+$CONDA_BASE deactivate
 
 echo -e "\nTodos los grupos procesados con éxito!"

@@ -34,7 +34,7 @@ for R1 in "${R1_FILES[@]}"; do
 
     echo "[INFO] Procesando muestra: $sample (grupo: $group)"
 
-    fastp \
+    /opt/conda/bin/conda run -n preproc fastp \
         --in1 "$R1" --in2 "$R2" \
         --out1 "$out_f1" --out2 "$out_f2" \
         --detect_adapter_for_pe \
