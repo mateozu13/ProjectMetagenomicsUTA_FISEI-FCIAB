@@ -48,7 +48,7 @@ echo "================================================="
 
 echo "El Slice $SLICE_NAME está listo para usarse."
 echo ""
-echo "Ejemplo de uso para ejecutar tu script DADA2 con alta prioridad:"
+echo "Ejemplo de uso para ejecutar scripts de QIIME 2 / DADA2 con alta prioridad:"
 echo ""
 echo "systemd-run \\"
 echo "  --slice=$SLICE_NAME \\"
