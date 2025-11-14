@@ -456,6 +456,7 @@ for GRUPO in "${GRUPOS[@]}"; do
   run_monitored "phylogeny_${GRUPO}" "$PHYLO_CMD"
 done
 
+
 # ============================================================================
 # PASO 4: ANÁLISIS DE DIVERSIDAD COMPARATIVO
 # ============================================================================
@@ -549,6 +550,7 @@ for GRUPO in "${GRUPOS[@]}"; do
     cp "$BASE_DADA2/$GRUPO/denoising-stats.qzv" "$RESULTS_DIR/denoising-stats-${GRUPO}.qzv"
 done
 find "$COMBINED_OUT/results" -name "*.qzv" -exec cp {} "$RESULTS_DIR/" \; 2>/dev/null || true
+
 
 # ============================================================================
 # CALCULAR MÉTRICAS TOTALES DEL PIPELINE

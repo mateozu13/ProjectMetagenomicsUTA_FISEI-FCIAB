@@ -8,9 +8,9 @@ set -euo pipefail
 SLICE_NAME="bioinfo.slice"
 SLICE_FILE="/etc/systemd/system/$SLICE_NAME"
 
-echo "================================================="
+echo "==================================================="
 echo " PASO 1: Creando el archivo de definición del Slice"
-echo "================================================="
+echo "==================================================="
 
 # Crear o sobrescribir el archivo de definición del Slice
 echo "[Unit]" | sudo tee "$SLICE_FILE" > /dev/null

@@ -7,7 +7,7 @@ set -euo pipefail
 source /opt/conda/etc/profile.d/conda.sh
 conda activate qiime2
 
-CLASSIFIER="/home/proyecto/qiime2_results/taxonomy/silva-138-99-nb-classifier.qza"
+CLASSIFIER="/home/proyecto/tools/silva-138-99-nb-classifier.qza"
 BASE_DADA2="/home/proyecto/qiime2_results/dada2"
 OUT_TAX="/home/proyecto/qiime2_results/taxonomy"
 NJOBS=6 # probar con 8 - 10 

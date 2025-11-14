@@ -31,9 +31,10 @@ require_root() {
 }
 
 install_prereqs() {
-  msg "Instalando prerequisitos via dnf…"
+  msg "Instalando prerrequisitos via dnf…"
   dnf -y update
   dnf -y install wget bzip2 ca-certificates curl coreutils tar which \
+                 sysstat dstat
                  git nano procps-ng findutils acl \
                  policycoreutils-python-utils >/dev/null
 }

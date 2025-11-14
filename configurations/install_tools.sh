@@ -13,7 +13,7 @@ ENV_PATH="${CONDA_DIR}/envs/${ENV_NAME}"
 GROUP_NAME="research"
 
 # Clasificador Silva
-SILVA_DIR="/home/proyecto/qiime2_results/taxonomy"
+SILVA_DIR="/home/proyecto/tools"
 SILVA_QZA="${SILVA_DIR}/silva-138-99-nb-classifier.qza"
 SILVA_URL="https://data.qiime2.org/classifiers/sklearn-1.4.2/silva/silva-138-99-nb-classifier.qza"
 

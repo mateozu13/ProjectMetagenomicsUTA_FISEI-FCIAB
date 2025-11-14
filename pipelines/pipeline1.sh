@@ -448,6 +448,7 @@ done
 echo "✓ Árboles filogenéticos completados"
 echo ""
 
+
 # ============================================================================
 # PASO 4: ANÁLISIS DE DIVERSIDAD COMPARATIVO
 # ============================================================================
@@ -612,6 +613,7 @@ echo "Visualizaciones disponibles en $RESULTS_DIR:"
 ls -1 "$RESULTS_DIR"/*.qzv 2>/dev/null | xargs -n 1 basename | sort || echo "  (Ninguna visualización generada)"
 
 echo ""
+
 
 # ============================================================================
 # RESUMEN FINAL Y RECOMENDACIONES

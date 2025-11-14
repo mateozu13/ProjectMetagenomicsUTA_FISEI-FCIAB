@@ -64,9 +64,14 @@ permissions(){
 }
 
 verify(){
+  # Instalar dependencias de python
+  msg "Instalando dependencias python en el entorno de QIIME 2…"
+  /opt/conda/bin/conda install -n qiime2 -c conda-forge pandas plotly
+
   msg "Verificando instalación de QIIME 2…"
   source /etc/profile.d/conda.sh 2>/dev/null || true
   conda activate "${ENV_NAME}"
+  
   qiime --version || err "No se encontró 'qiime' en el entorno."
   qiime info | head -n 15
   conda deactivate
