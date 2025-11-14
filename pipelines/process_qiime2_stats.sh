@@ -211,7 +211,7 @@ run_monitored() {
   
   echo ""
   echo "=========================================="
-  echo "🚀 Ejecutando: $STEP_NAME"
+  echo "  Ejecutando: $STEP_NAME"
   echo "=========================================="
   echo "Comando: $COMMAND"
   echo "Inicio: $(date '+%Y-%m-%d %H:%M:%S')"
@@ -330,26 +330,26 @@ if [[ ! -f "$METADATA_FILE" ]]; then
 fi
 
 echo "✓ Metadata encontrado: $METADATA_FILE"
-TOTAL_SAMPLES=$(grep -v "^#SampleID" "$METADATA_FILE" | wc -l)
-echo "   Total de muestras: $TOTAL_SAMPLES"
 echo ""
 
 # ============================================================================
 # PASO 1: PREPROCESAMIENTO CON FASTP
 # ============================================================================
 
-STEP_COUNTER=0
-
 for GRUPO in "${GRUPOS[@]}"; do
   GRUPO_RAW="$RAW_DIR/$GRUPO"
   GRUPO_PREPROC="$PREPROC_DIR/$GRUPO"
   mkdir -p "$GRUPO_PREPROC"
   
-  while IFS= read -r fq1; do
-    [[ ! -f "$fq1" ]] && continue
+  for fq1 in "$GRUPO_RAW"/*_1.fq.gz; do
+    if [[ ! -f "$fq1" ]]; then
+      continue
+    fi
     
     fq2="${fq1/_1.fq.gz/_2.fq.gz}"
-    [[ ! -f "$fq2" ]] && continue
+    if [[ ! -f "$fq2" ]]; then
+      continue
+    fi
     
     basename_fq=$(basename "$fq1" _1.fq.gz)
     out1="$GRUPO_PREPROC/${basename_fq}_filtered_1.fq.gz"
@@ -371,9 +371,8 @@ for GRUPO in "${GRUPOS[@]}"; do
     [[ $FASTP_TRIM_FRONT2 -gt 0 ]] && FASTP_CMD="$FASTP_CMD --trim_front2 $FASTP_TRIM_FRONT2"
     [[ "$FASTP_CUT_TAIL" == "true" ]] && FASTP_CMD="$FASTP_CMD --cut_tail"
     
-    ((STEP_COUNTER++))
     run_monitored "fastp_${GRUPO}_${basename_fq}" "$FASTP_CMD"
-  done < <(find "$GRUPO_RAW" -maxdepth 1 -name "*_1.fq.gz" -type f)
+  done
 done
 
 # MultiQC
@@ -396,12 +395,12 @@ for GRUPO in "${GRUPOS[@]}"; do
   
   # Crear manifest
   echo -e "sample-id\tforward-absolute-filepath\treverse-absolute-filepath" > "$MANIFEST"
-  while IFS= read -r f; do
+  for f in "$GRUPO_INPUT"/*_filtered_1.fq.gz; do
     [[ ! -f "$f" ]] && continue
     id=$(basename "$f" | sed 's/_filtered_1\.fq\.gz$//')
     rev="${f/_filtered_1/_filtered_2}"
     echo -e "$id\t$f\t$rev" >> "$MANIFEST"
-  done < <(find "$GRUPO_INPUT" -maxdepth 1 -name "*_filtered_1.fq.gz" -type f)
+  done
   
   # Importar (sin monitoreo intensivo)
   echo "Importando datos para $GRUPO..."
