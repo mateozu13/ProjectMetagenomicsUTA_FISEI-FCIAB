@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 ################################################################################
-# Pipeline completo de análisis de microbioma con monitoreo de recursos
-# Incluye: Preprocesamiento, DADA2, filogenia, diversidad + métricas de rendimiento
+# Pipeline completo de análisis de microbioma con monitoreo COMPLETO de recursos
+# Incluye: Preprocesamiento, DADA2, filogenia, diversidad + métricas detalladas
+# Métricas: CPU, Memoria, I/O de disco, Red, Tiempo total y por paso
 # 
-# Uso: bash qiime2_pipeline_monitored.sh <nombre_proyecto> [config_file]
-# Ejemplo: bash qiime2_pipeline_monitored.sh Proyecto1_20241113
+# Uso: bash process_qiime2_stats.sh <nombre_proyecto> [config_file]
+# Ejemplo: bash process_qiime2_stats.sh Proyecto1_20251113
 ################################################################################
 
 set -euo pipefail
@@ -79,10 +80,38 @@ mkdir -p "$METRICS_DIR"
 # Archivos de salida
 MASTER_LOG="$LOGS_DIR/pipeline_master.log"
 TIMING_LOG="$LOGS_DIR/timing_summary.csv"
-DSTAT_CSV="$METRICS_DIR/system_metrics.csv"
+SYSTEM_SUMMARY="$METRICS_DIR/system_summary.csv"
+PIPELINE_SUMMARY="$METRICS_DIR/pipeline_summary.txt"
 
-# Inicializar archivos
-echo "step,start_time,end_time,duration_seconds,max_memory_kb,cpu_percent,exit_status" > "$TIMING_LOG"
+# Inicializar archivos CSV con TODAS las métricas
+echo "step,start_time,end_time,duration_seconds,duration_minutes,max_memory_kb,max_memory_mb,max_memory_gb,cpu_percent,io_read_mb,io_write_mb,io_total_mb,exit_status" > "$TIMING_LOG"
+
+echo "timestamp,step,cpu_user,cpu_system,cpu_idle,memory_used_mb,memory_free_mb,disk_read_mb,disk_write_mb,network_recv_mb,network_send_mb" > "$SYSTEM_SUMMARY"
+
+# Variables globales para métricas del pipeline completo
+declare -A STEP_IO_READ
+declare -A STEP_IO_WRITE
+PIPELINE_START_IO_READ=0
+PIPELINE_START_IO_WRITE=0
+
+# Función para obtener I/O del sistema
+get_system_io() {
+  # Leer estadísticas de I/O del disco principal
+  local io_stats=$(cat /proc/diskstats | grep -E "sda|nvme0n1|vda" | head -1)
+  if [[ -n "$io_stats" ]]; then
+    # Columnas: sectors_read (6) y sectors_written (10)
+    local sectors_read=$(echo "$io_stats" | awk '{print $6}')
+    local sectors_written=$(echo "$io_stats" | awk '{print $10}')
+    
+    # Convertir sectores a MB (asumiendo 512 bytes por sector)
+    local mb_read=$(echo "scale=2; $sectors_read * 512 / 1024 / 1024" | bc)
+    local mb_written=$(echo "scale=2; $sectors_written * 512 / 1024 / 1024" | bc)
+    
+    echo "$mb_read|$mb_written"
+  else
+    echo "0|0"
+  fi
+}
 
 # Función para iniciar monitoreo de un paso
 start_monitoring() {
@@ -91,15 +120,23 @@ start_monitoring() {
   local STEP_TIME="$LOGS_DIR/${STEP_NAME}_time.log"
   local STEP_METRICS="$METRICS_DIR/${STEP_NAME}_dstat.csv"
   
-  # Iniciar dstat para este paso
-  dstat -tcmnd --output "$STEP_METRICS" 1 > /dev/null 2>&1 &
+  # Capturar I/O inicial
+  local io_initial=$(get_system_io)
+  IFS='|' read -r io_read_start io_write_start <<< "$io_initial"
+  
+  # Iniciar dstat para este paso (incluye I/O de disco y red)
+  dstat -tcmndN total --output "$STEP_METRICS" 1 > /dev/null 2>&1 &
   local DSTAT_PID=$!
+  
+  # Iniciar iostat para métricas detalladas de I/O
+  iostat -x 1 > "$LOGS_DIR/${STEP_NAME}_iostat.log" 2>&1 &
+  local IOSTAT_PID=$!
   
   # Guardar timestamp de inicio
   local START_TIME=$(date +%s)
   
-  # Retornar PIDs y archivos
-  echo "$DSTAT_PID|$START_TIME|$STEP_LOG|$STEP_TIME|$STEP_METRICS"
+  # Retornar PIDs, archivos y métricas iniciales
+  echo "$DSTAT_PID|$IOSTAT_PID|$START_TIME|$io_read_start|$io_write_start|$STEP_LOG|$STEP_TIME|$STEP_METRICS"
 }
 
 # Función para detener monitoreo de un paso
@@ -109,29 +146,61 @@ stop_monitoring() {
   local EXIT_CODE=$3
   
   # Parsear información
-  IFS='|' read -r DSTAT_PID START_TIME STEP_LOG STEP_TIME STEP_METRICS <<< "$MONITOR_INFO"
+  IFS='|' read -r DSTAT_PID IOSTAT_PID START_TIME IO_READ_START IO_WRITE_START STEP_LOG STEP_TIME STEP_METRICS <<< "$MONITOR_INFO"
   
-  # Detener dstat
+  # Detener procesos de monitoreo
   kill $DSTAT_PID 2>/dev/null || true
+  kill $IOSTAT_PID 2>/dev/null || true
   wait $DSTAT_PID 2>/dev/null || true
+  wait $IOSTAT_PID 2>/dev/null || true
   
   # Calcular duración
   local END_TIME=$(date +%s)
   local DURATION=$((END_TIME - START_TIME))
+  local DURATION_MIN=$(echo "scale=2; $DURATION / 60" | bc)
+  
+  # Capturar I/O final y calcular diferencia
+  local io_final=$(get_system_io)
+  IFS='|' read -r io_read_end io_write_end <<< "$io_final"
+  
+  local IO_READ_MB=$(echo "scale=2; $io_read_end - $IO_READ_START" | bc | awk '{printf "%.2f", $0}')
+  local IO_WRITE_MB=$(echo "scale=2; $io_write_end - $IO_WRITE_START" | bc | awk '{printf "%.2f", $0}')
+  local IO_TOTAL_MB=$(echo "scale=2; $IO_READ_MB + $IO_WRITE_MB" | bc | awk '{printf "%.2f", $0}')
+  
+  # Guardar I/O en arrays globales
+  STEP_IO_READ["$STEP_NAME"]=$IO_READ_MB
+  STEP_IO_WRITE["$STEP_NAME"]=$IO_WRITE_MB
   
   # Extraer métricas del log de time
-  local MAX_MEM="N/A"
-  local CPU_PERCENT="N/A"
+  local MAX_MEM_KB="0"
+  local MAX_MEM_MB="0"
+  local MAX_MEM_GB="0"
+  local CPU_PERCENT="0"
+  
   if [[ -f "$STEP_TIME" ]]; then
-    MAX_MEM=$(grep "Maximum resident set size" "$STEP_TIME" | awk '{print $6}' || echo "N/A")
-    CPU_PERCENT=$(grep "Percent of CPU" "$STEP_TIME" | awk '{print $7}' | tr -d '%' || echo "N/A")
+    MAX_MEM_KB=$(grep "Maximum resident set size" "$STEP_TIME" | awk '{print $6}' || echo "0")
+    MAX_MEM_MB=$(echo "scale=2; $MAX_MEM_KB / 1024" | bc | awk '{printf "%.2f", $0}')
+    MAX_MEM_GB=$(echo "scale=3; $MAX_MEM_KB / 1024 / 1024" | bc | awk '{printf "%.3f", $0}')
+    CPU_PERCENT=$(grep "Percent of CPU" "$STEP_TIME" | awk '{print $7}' | tr -d '%' || echo "0")
   fi
   
-  # Guardar en resumen
-  echo "$STEP_NAME,$(date -d @$START_TIME '+%Y-%m-%d %H:%M:%S'),$(date -d @$END_TIME '+%Y-%m-%d %H:%M:%S'),$DURATION,$MAX_MEM,$CPU_PERCENT,$EXIT_CODE" >> "$TIMING_LOG"
+  # Guardar en resumen CSV con TODAS las métricas
+  echo "$STEP_NAME,$(date -d @$START_TIME '+%Y-%m-%d %H:%M:%S'),$(date -d @$END_TIME '+%Y-%m-%d %H:%M:%S'),$DURATION,$DURATION_MIN,$MAX_MEM_KB,$MAX_MEM_MB,$MAX_MEM_GB,$CPU_PERCENT,$IO_READ_MB,$IO_WRITE_MB,$IO_TOTAL_MB,$EXIT_CODE" >> "$TIMING_LOG"
   
-  # Mostrar resumen
-  echo "  Duración: ${DURATION}s | Memoria máx: ${MAX_MEM}KB | CPU: ${CPU_PERCENT}%"
+  # Mostrar resumen detallado
+  echo ""
+  echo "  ═══════════════════════════════════════"
+  echo "   MÉTRICAS DEL PASO: $STEP_NAME"
+  echo "  ═══════════════════════════════════════"
+  echo "   Duración:        ${DURATION}s (${DURATION_MIN} min)"
+  echo "   Memoria máxima:   ${MAX_MEM_MB} MB (${MAX_MEM_GB} GB)"
+  echo "   CPU promedio:     ${CPU_PERCENT}%"
+  echo "   I/O Lectura:      ${IO_READ_MB} MB"
+  echo "   I/O Escritura:    ${IO_WRITE_MB} MB"
+  echo "   I/O Total:        ${IO_TOTAL_MB} MB"
+  echo "   Estado:           $([ $EXIT_CODE -eq 0 ] && echo 'Exitoso' || echo "Error (código $EXIT_CODE)")"
+  echo "  ═══════════════════════════════════════"
+  echo ""
 }
 
 # Función para ejecutar comando con monitoreo
@@ -142,8 +211,10 @@ run_monitored() {
   
   echo ""
   echo "=========================================="
-  echo "Ejecutando: $STEP_NAME"
+  echo "🚀 Ejecutando: $STEP_NAME"
   echo "=========================================="
+  echo "Comando: $COMMAND"
+  echo "Inicio: $(date '+%Y-%m-%d %H:%M:%S')"
   
   local STEP_LOG="$LOGS_DIR/${STEP_NAME}.log"
   local STEP_TIME="$LOGS_DIR/${STEP_NAME}_time.log"
@@ -166,7 +237,7 @@ run_monitored() {
     return $EXIT_CODE
   fi
   
-  echo "✓ $STEP_NAME completado"
+  echo "✓ $STEP_NAME completado exitosamente"
   return 0
 }
 
@@ -175,18 +246,29 @@ run_monitored() {
 # ============================================================================
 
 echo ""
-echo "=========================================="
-echo "Pipeline QIIME2 con Monitoreo"
-echo "=========================================="
+echo "╔════════════════════════════════════════════════════════╗"
+echo "║     PIPELINE QIIME2 CON MONITOREO COMPLETO             ║"
+echo "╚════════════════════════════════════════════════════════╝"
+echo ""
 echo "Proyecto: $PROJECT_NAME"
+echo "Directorio: $PROJECT_DIR"
 echo "Hora de inicio: $(date '+%Y-%m-%d %H:%M:%S')"
 echo ""
 echo "Logs: $LOGS_DIR"
 echo "Métricas: $METRICS_DIR"
 echo ""
 
-# Timestamp de inicio global
+# Capturar timestamp e I/O inicial del pipeline completo
 PIPELINE_START=$(date +%s)
+PIPELINE_START_DATETIME=$(date '+%Y-%m-%d %H:%M:%S')
+
+io_pipeline_start=$(get_system_io)
+IFS='|' read -r PIPELINE_START_IO_READ PIPELINE_START_IO_WRITE <<< "$io_pipeline_start"
+
+echo "  I/O inicial del sistema:"
+echo "  Lectura acumulada: ${PIPELINE_START_IO_READ} MB"
+echo "  Escritura acumulada: ${PIPELINE_START_IO_WRITE} MB"
+echo ""
 
 # ============================================================================
 # VERIFICACIÓN DE ESTRUCTURA
@@ -204,7 +286,11 @@ if [[ ! -d "$RAW_DIR" ]]; then
 fi
 
 # Detectar grupos
-GRUPOS=($(find "$RAW_DIR" -mindepth 1 -maxdepth 1 -type d -exec basename {} \; | sort))
+GRUPOS=()
+while IFS= read -r dir; do
+  GRUPOS+=("$(basename "$dir")")
+done < <(find "$RAW_DIR" -mindepth 1 -maxdepth 1 -type d | sort)
+
 if [[ ${#GRUPOS[@]} -eq 0 ]]; then
   echo "ERROR: No se encontraron subdirectorios en raw_sequences/"
   exit 1
@@ -244,26 +330,26 @@ if [[ ! -f "$METADATA_FILE" ]]; then
 fi
 
 echo "✓ Metadata encontrado: $METADATA_FILE"
+TOTAL_SAMPLES=$(grep -v "^#SampleID" "$METADATA_FILE" | wc -l)
+echo "   Total de muestras: $TOTAL_SAMPLES"
 echo ""
 
 # ============================================================================
 # PASO 1: PREPROCESAMIENTO CON FASTP
 # ============================================================================
 
+STEP_COUNTER=0
+
 for GRUPO in "${GRUPOS[@]}"; do
   GRUPO_RAW="$RAW_DIR/$GRUPO"
   GRUPO_PREPROC="$PREPROC_DIR/$GRUPO"
   mkdir -p "$GRUPO_PREPROC"
   
-  for fq1 in "$GRUPO_RAW"/*_1.fq.gz; do
-    if [[ ! -f "$fq1" ]]; then
-      continue
-    fi
+  while IFS= read -r fq1; do
+    [[ ! -f "$fq1" ]] && continue
     
     fq2="${fq1/_1.fq.gz/_2.fq.gz}"
-    if [[ ! -f "$fq2" ]]; then
-      continue
-    fi
+    [[ ! -f "$fq2" ]] && continue
     
     basename_fq=$(basename "$fq1" _1.fq.gz)
     out1="$GRUPO_PREPROC/${basename_fq}_filtered_1.fq.gz"
@@ -285,8 +371,9 @@ for GRUPO in "${GRUPOS[@]}"; do
     [[ $FASTP_TRIM_FRONT2 -gt 0 ]] && FASTP_CMD="$FASTP_CMD --trim_front2 $FASTP_TRIM_FRONT2"
     [[ "$FASTP_CUT_TAIL" == "true" ]] && FASTP_CMD="$FASTP_CMD --cut_tail"
     
+    ((STEP_COUNTER++))
     run_monitored "fastp_${GRUPO}_${basename_fq}" "$FASTP_CMD"
-  done
+  done < <(find "$GRUPO_RAW" -maxdepth 1 -name "*_1.fq.gz" -type f)
 done
 
 # MultiQC
@@ -309,12 +396,12 @@ for GRUPO in "${GRUPOS[@]}"; do
   
   # Crear manifest
   echo -e "sample-id\tforward-absolute-filepath\treverse-absolute-filepath" > "$MANIFEST"
-  for f in "$GRUPO_INPUT"/*_filtered_1.fq.gz; do
+  while IFS= read -r f; do
     [[ ! -f "$f" ]] && continue
     id=$(basename "$f" | sed 's/_filtered_1\.fq\.gz$//')
     rev="${f/_filtered_1/_filtered_2}"
     echo -e "$id\t$f\t$rev" >> "$MANIFEST"
-  done
+  done < <(find "$GRUPO_INPUT" -maxdepth 1 -name "*_filtered_1.fq.gz" -type f)
   
   # Importar (sin monitoreo intensivo)
   echo "Importando datos para $GRUPO..."
@@ -462,31 +549,108 @@ for GRUPO in "${GRUPOS[@]}"; do
   [[ -f "$BASE_DADA2/$GRUPO/denoising-stats.qzv" ]] && \
     cp "$BASE_DADA2/$GRUPO/denoising-stats.qzv" "$RESULTS_DIR/denoising-stats-${GRUPO}.qzv"
 done
-find "$COMBINED_OUT/results" -name "*.qzv" -exec cp {} "$RESULTS_DIR/" \;
+find "$COMBINED_OUT/results" -name "*.qzv" -exec cp {} "$RESULTS_DIR/" \; 2>/dev/null || true
 
 # ============================================================================
-# RESUMEN FINAL
+# CALCULAR MÉTRICAS TOTALES DEL PIPELINE
 # ============================================================================
 
 PIPELINE_END=$(date +%s)
+PIPELINE_END_DATETIME=$(date '+%Y-%m-%d %H:%M:%S')
 TOTAL_DURATION=$((PIPELINE_END - PIPELINE_START))
+
+# Calcular I/O total del pipeline
+io_pipeline_end=$(get_system_io)
+IFS='|' read -r PIPELINE_END_IO_READ PIPELINE_END_IO_WRITE <<< "$io_pipeline_end"
+
+PIPELINE_IO_READ=$(echo "scale=2; $PIPELINE_END_IO_READ - $PIPELINE_START_IO_READ" | bc | awk '{printf "%.2f", $0}')
+PIPELINE_IO_WRITE=$(echo "scale=2; $PIPELINE_END_IO_WRITE - $PIPELINE_START_IO_WRITE" | bc | awk '{printf "%.2f", $0}')
+PIPELINE_IO_TOTAL=$(echo "scale=2; $PIPELINE_IO_READ + $PIPELINE_IO_WRITE" | bc | awk '{printf "%.2f", $0}')
+
+# Conversiones de tiempo
 HOURS=$((TOTAL_DURATION / 3600))
 MINUTES=$(((TOTAL_DURATION % 3600) / 60))
 SECONDS=$((TOTAL_DURATION % 60))
+TOTAL_MINUTES=$(echo "scale=2; $TOTAL_DURATION / 60" | bc)
+
+# Calcular métricas agregadas de todos los pasos
+TOTAL_MEMORY_MB=$(awk -F',' 'NR>1 {sum+=$7} END {printf "%.2f", sum}' "$TIMING_LOG")
+AVG_CPU=$(awk -F',' 'NR>1 {sum+=$9; count++} END {if(count>0) printf "%.2f", sum/count; else print "0"}' "$TIMING_LOG")
+
+# ============================================================================
+# GENERAR RESUMEN FINAL
+# ============================================================================
+
+cat > "$PIPELINE_SUMMARY" << EOF
+╔════════════════════════════════════════════════════════════════╗
+║          RESUMEN COMPLETO DEL PIPELINE QIIME2                 ║
+╚════════════════════════════════════════════════════════════════╝
+
+INFORMACIÓN DEL PROYECTO
+========================
+Proyecto:              $PROJECT_NAME
+Directorio:            $PROJECT_DIR
+Grupos analizados:     ${GRUPOS[@]}
+Total de muestras:     $TOTAL_SAMPLES
+
+TIEMPOS DE EJECUCIÓN
+====================
+Inicio:                $PIPELINE_START_DATETIME
+Fin:                   $PIPELINE_END_DATETIME
+Duración total:        ${HOURS}h ${MINUTES}m ${SECONDS}s
+Duración (minutos):    ${TOTAL_MINUTES} min
+Duración (segundos):   ${TOTAL_DURATION} s
+
+CONSUMO DE RECURSOS TOTALES
+============================
+I/O Lectura total:     ${PIPELINE_IO_READ} MB
+I/O Escritura total:   ${PIPELINE_IO_WRITE} MB
+I/O Total:             ${PIPELINE_IO_TOTAL} MB
+Memoria acumulada:     ${TOTAL_MEMORY_MB} MB
+CPU promedio:          ${AVG_CPU}%
+
+ARCHIVOS GENERADOS
+==================
+Logs:                  $LOGS_DIR
+Métricas:              $METRICS_DIR
+Visualizaciones:       $RESULTS_DIR
+Resumen CSV:           $TIMING_LOG
+
+PASOS EJECUTADOS
+================
+EOF
+
+# Agregar resumen de cada paso
+awk -F',' 'NR>1 {printf "%-30s %8.2f min  %10.2f MB  %6.1f%%  %8.2f MB I/O\n", $1, $5, $7, $9, $12}' "$TIMING_LOG" >> "$PIPELINE_SUMMARY"
+
+cat >> "$PIPELINE_SUMMARY" << EOF
+
+═══════════════════════════════════════════════════════════════════
+Para visualizar gráficos detallados, ejecute:
+  bash generate_plots.sh $PROJECT_NAME
+
+Archivos de interés:
+  - Resumen CSV: $TIMING_LOG
+  - Métricas sistema: $SYSTEM_SUMMARY
+  - Este resumen: $PIPELINE_SUMMARY
+═══════════════════════════════════════════════════════════════════
+EOF
+
+# ============================================================================
+# MOSTRAR RESUMEN EN PANTALLA
+# ============================================================================
 
 echo ""
-echo "=========================================="
-echo "✓ PIPELINE COMPLETADO"
-echo "=========================================="
+echo "╔════════════════════════════════════════════════════════════════╗"
+echo "║                 PIPELINE COMPLETADO EXITOSAMENTE               ║"
+echo "╚════════════════════════════════════════════════════════════════╝"
 echo ""
-echo "Hora de finalización: $(date '+%Y-%m-%d %H:%M:%S')"
-echo "Duración total: ${HOURS}h ${MINUTES}m ${SECONDS}s"
+cat "$PIPELINE_SUMMARY"
 echo ""
-echo "Archivos de monitoreo:"
-echo "  - Resumen de tiempos: $TIMING_LOG"
-echo "  - Logs detallados: $LOGS_DIR/"
-echo "  - Métricas del sistema: $METRICS_DIR/"
+echo "  MÉTRICAS DETALLADAS GUARDADAS EN:"
+echo "   - $TIMING_LOG"
+echo "   - $PIPELINE_SUMMARY"
 echo ""
-echo "Para generar gráficos, ejecute:"
-echo "  bash generate_plots.sh $PROJECT_NAME"
+echo "  SIGUIENTE PASO: Generar gráficos"
+echo "   bash generate_plots.sh $PROJECT_NAME"
 echo ""
