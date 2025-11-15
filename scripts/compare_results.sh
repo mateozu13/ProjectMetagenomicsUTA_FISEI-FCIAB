@@ -15,7 +15,7 @@ if [[ $# -lt 2 ]]; then
   echo "Uso: bash $0 <proyecto1> <proyecto2> [proyecto3] ..."
   echo ""
   echo "Ejemplo:"
-  echo "  bash $0 Proyecto_Original Proyecto_Optimizado"
+  echo "  bash $0 Proyecto_1 Proyecto_2"
   echo ""
   exit 1
 fi
