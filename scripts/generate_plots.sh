@@ -960,10 +960,10 @@ def main():
     create_index_html(output_dir, df_timing)
     
     print("\n" + "="*60)
-    print(f"✅ Todos los gráficos generados exitosamente")
+    print(f"    Todos los gráficos generados exitosamente")
     print("="*60)
-    print(f"\n📂 Ubicación: {output_dir}")
-    print(f"🌐 Abrir en navegador: {output_dir}/index.html\n")
+    print(f"\n  Ubicación: {output_dir}")
+    print(f"    Abrir en navegador: {output_dir}/index.html\n")
 
 if __name__ == "__main__":
     main()
@@ -984,24 +984,24 @@ echo ""
 if [[ $? -eq 0 ]]; then
   echo ""
   echo "╔════════════════════════════════════════════════════════╗"
-  echo "║       ✅ GRÁFICOS GENERADOS EXITOSAMENTE              ║"
+  echo "║           GRÁFICOS GENERADOS EXITOSAMENTE              ║"
   echo "╚════════════════════════════════════════════════════════╝"
   echo ""
-  echo "📂 Ubicación: $PLOTS_DIR"
+  echo " Ubicación: $PLOTS_DIR"
   echo ""
-  echo "🌐 Para visualizar, abra en su navegador:"
+  echo " Para visualizar, abra en su navegador:"
   echo "   file://$PLOTS_DIR/index.html"
   echo ""
-  echo "📊 Gráficos disponibles:"
+  echo " Gráficos disponibles:"
   ls -1 "$PLOTS_DIR"/*.html | xargs -n 1 basename | grep -v "generate_plots.py" | nl
   echo ""
-  echo "💡 Tip: Use estos gráficos para:"
+  echo " Tip: Use estos gráficos para:"
   echo "   - Identificar cuellos de botella"
   echo "   - Comparar diferentes configuraciones"
   echo "   - Optimizar uso de recursos"
   echo "   - Dimensionar infraestructura"
   echo ""
 else
-  echo "❌ ERROR: Falló la generación de gráficos"
+  echo " ERROR: Falló la generación de gráficos"
   exit 1
 fi
