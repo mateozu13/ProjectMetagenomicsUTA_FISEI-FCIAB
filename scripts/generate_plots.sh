@@ -25,7 +25,7 @@ mkdir -p "$PLOTS_DIR"
 
 echo ""
 echo "╔════════════════════════════════════════════════════════╗"
-echo "║     GENERADOR DE GRÁFICOS DE RENDIMIENTO              ║"
+echo "║      GENERADOR DE GRÁFICOS DE RENDIMIENTO              ║"
 echo "╚════════════════════════════════════════════════════════╝"
 echo "Proyecto: $PROJECT_NAME"
 echo ""
