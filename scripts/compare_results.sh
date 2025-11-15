@@ -26,7 +26,7 @@ mkdir -p "$COMPARISON_DIR"
 
 echo ""
 echo "╔════════════════════════════════════════════════════════╗"
-echo "║       COMPARACIÓN DE EJECUCIONES DEL PIPELINE         ║"
+echo "║        COMPARACIÓN DE EJECUCIONES DEL PIPELINE         ║"
 echo "╚════════════════════════════════════════════════════════╝"
 echo ""
 echo "Proyectos a comparar: $@"
