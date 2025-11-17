@@ -16,7 +16,7 @@ ENV_NAME="qiime2"
 ENV_PATH="${CONDA_DIR}/envs/${ENV_NAME}"
 GROUP_NAME="research"
 QIIME_CHANNELS=(-c qiime2 -c conda-forge -c bioconda)
-QIIME_SPECS=("qiime2=2024.10" "q2cli" "q2-dada2")
+QIIME_SPECS=("qiime2=2024.10" "q2cli" "q2-dada2" "q2-metadata")
 
 # functions
 msg(){ echo -e "\n[INFO] $*"; }

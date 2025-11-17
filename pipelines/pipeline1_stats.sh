@@ -4,8 +4,8 @@
 # Incluye: Preprocesamiento, DADA2, filogenia, diversidad + métricas detalladas
 # Métricas: CPU, Memoria, I/O de disco, Red, Tiempo total y por paso
 # 
-# Uso: bash process_qiime2_stats.sh <nombre_proyecto> [config_file]
-# Ejemplo: bash process_qiime2_stats.sh Proyecto1_20251113
+# Uso: bash pipeline1_stats.sh <nombre_proyecto> [config_file]
+# Ejemplo: bash pipeline1_stats.sh Proyecto1_20241113
 ################################################################################
 
 set -euo pipefail
@@ -326,30 +326,31 @@ if [[ ! -f "$METADATA_FILE" ]]; then
   echo ""
   echo "Luego vuelva a ejecutar este pipeline."
   echo ""
+  echo ""
   exit 1
 fi
 
 echo "✓ Metadata encontrado: $METADATA_FILE"
+TOTAL_SAMPLES=$(grep -v "^#SampleID" "$METADATA_FILE" | wc -l)
+echo "   Total de muestras: $TOTAL_SAMPLES"
 echo ""
 
 # ============================================================================
 # PASO 1: PREPROCESAMIENTO CON FASTP
 # ============================================================================
 
+STEP_COUNTER=0
+
 for GRUPO in "${GRUPOS[@]}"; do
   GRUPO_RAW="$RAW_DIR/$GRUPO"
   GRUPO_PREPROC="$PREPROC_DIR/$GRUPO"
   mkdir -p "$GRUPO_PREPROC"
   
-  for fq1 in "$GRUPO_RAW"/*_1.fq.gz; do
-    if [[ ! -f "$fq1" ]]; then
-      continue
-    fi
+  while IFS= read -r fq1; do
+    [[ ! -f "$fq1" ]] && continue
     
     fq2="${fq1/_1.fq.gz/_2.fq.gz}"
-    if [[ ! -f "$fq2" ]]; then
-      continue
-    fi
+    [[ ! -f "$fq2" ]] && continue
     
     basename_fq=$(basename "$fq1" _1.fq.gz)
     out1="$GRUPO_PREPROC/${basename_fq}_filtered_1.fq.gz"
@@ -371,8 +372,9 @@ for GRUPO in "${GRUPOS[@]}"; do
     [[ $FASTP_TRIM_FRONT2 -gt 0 ]] && FASTP_CMD="$FASTP_CMD --trim_front2 $FASTP_TRIM_FRONT2"
     [[ "$FASTP_CUT_TAIL" == "true" ]] && FASTP_CMD="$FASTP_CMD --cut_tail"
     
+    ((STEP_COUNTER++))
     run_monitored "fastp_${GRUPO}_${basename_fq}" "$FASTP_CMD"
-  done
+  done < <(find "$GRUPO_RAW" -maxdepth 1 -name "*_1.fq.gz" -type f)
 done
 
 # MultiQC
@@ -395,12 +397,12 @@ for GRUPO in "${GRUPOS[@]}"; do
   
   # Crear manifest
   echo -e "sample-id\tforward-absolute-filepath\treverse-absolute-filepath" > "$MANIFEST"
-  for f in "$GRUPO_INPUT"/*_filtered_1.fq.gz; do
+  while IFS= read -r f; do
     [[ ! -f "$f" ]] && continue
     id=$(basename "$f" | sed 's/_filtered_1\.fq\.gz$//')
     rev="${f/_filtered_1/_filtered_2}"
     echo -e "$id\t$f\t$rev" >> "$MANIFEST"
-  done
+  done < <(find "$GRUPO_INPUT" -maxdepth 1 -name "*_filtered_1.fq.gz" -type f)
   
   # Importar (sin monitoreo intensivo)
   echo "Importando datos para $GRUPO..."
@@ -455,7 +457,6 @@ for GRUPO in "${GRUPOS[@]}"; do
   
   run_monitored "phylogeny_${GRUPO}" "$PHYLO_CMD"
 done
-
 
 # ============================================================================
 # PASO 4: ANÁLISIS DE DIVERSIDAD COMPARATIVO
@@ -550,7 +551,6 @@ for GRUPO in "${GRUPOS[@]}"; do
     cp "$BASE_DADA2/$GRUPO/denoising-stats.qzv" "$RESULTS_DIR/denoising-stats-${GRUPO}.qzv"
 done
 find "$COMBINED_OUT/results" -name "*.qzv" -exec cp {} "$RESULTS_DIR/" \; 2>/dev/null || true
-
 
 # ============================================================================
 # CALCULAR MÉTRICAS TOTALES DEL PIPELINE

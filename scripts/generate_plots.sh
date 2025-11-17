@@ -4,7 +4,7 @@
 # Crea visualizaciones interactivas en HTML usando Python/Plotly
 # Incluye: Tiempo, CPU, Memoria, I/O, Comparaciones
 # 
-# Uso: bash generate_plots_mejorado.sh <nombre_proyecto>
+# Uso: bash generate_plots.sh <nombre_proyecto>
 ################################################################################
 
 set -euo pipefail
