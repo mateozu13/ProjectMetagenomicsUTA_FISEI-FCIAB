@@ -16,7 +16,21 @@ ENV_NAME="qiime2"
 ENV_PATH="${CONDA_DIR}/envs/${ENV_NAME}"
 GROUP_NAME="research"
 QIIME_CHANNELS=(-c qiime2 -c conda-forge -c bioconda)
-QIIME_SPECS=("qiime2=2024.10" "q2cli" "q2-dada2" "q2-metadata")
+QIIME_SPECS=(
+  "qiime2=2024.10"
+  "q2cli"
+  "q2-dada2"
+  "q2-metadata"
+  "q2-phylogeny"
+  "q2-feature-classifier"
+  "q2-diversity"
+  "q2-taxa"
+  "q2-composition"
+  "q2-alignment"
+  "q2-feature-table"
+  "mafft"
+  "fasttree"
+)
 
 # functions
 msg(){ echo -e "\n[INFO] $*"; }
@@ -63,30 +77,60 @@ permissions(){
   setfacl -R -d -m g:${GROUP_NAME}:rwx "${ENV_PATH}"
 }
 
+suppress_warnings(){
+  msg "Configurando supresión de warnings de pkg_resources..."
+  mkdir -p "${ENV_PATH}/etc/conda/activate.d"
+  
+  cat > "${ENV_PATH}/etc/conda/activate.d/env_vars.sh" <<'EOF'
+#!/bin/bash
+export PYTHONWARNINGS="ignore::DeprecationWarning:pkg_resources"
+EOF
+  
+  chmod +x "${ENV_PATH}/etc/conda/activate.d/env_vars.sh"
+  chown root:"${GROUP_NAME}" "${ENV_PATH}/etc/conda/activate.d/env_vars.sh"
+}
+
 verify(){
   # Instalar dependencias de python
   msg "Instalando dependencias python en el entorno de QIIME 2…"
-  /opt/conda/bin/conda install -n qiime2 -c conda-forge pandas plotly
+  /opt/conda/bin/conda install -n qiime2 -c conda-forge pandas plotly -y
 
   msg "Verificando instalación de QIIME 2…"
   source /etc/profile.d/conda.sh 2>/dev/null || true
   conda activate "${ENV_NAME}"
   
   qiime --version || err "No se encontró 'qiime' en el entorno."
-  qiime info | head -n 15
+  
+  echo ""
+  echo "=========================================="
+  echo "Plugins instalados:"
+  echo "=========================================="
+  qiime info
+  
+  # Verificar plugins críticos
+  echo ""
+  echo "Verificando plugins críticos..."
+  for plugin in phylogeny dada2 feature-classifier diversity taxa; do
+    if qiime $plugin --help &>/dev/null; then
+      echo "  ✓ $plugin: OK"
+    else
+      echo "  ✗ $plugin: FALTA"
+    fi
+  done
+  
   conda deactivate
 
-  echo
+  echo ""
   echo "=== OK ==="
   echo "Entorno:     ${ENV_NAME}"
   echo "Ubicación:   ${ENV_PATH}"
   echo "Grupo:       ${GROUP_NAME}"
-  echo
+  echo ""
   echo "Uso (para cualquier usuario del grupo ${GROUP_NAME}):"
   echo "  conda activate ${ENV_NAME}"
   echo "  qiime info"
   echo "  conda deactivate    # salir del env"
-  echo
+  echo ""
 }
 
 main(){
@@ -94,6 +138,7 @@ main(){
   check_conda
   create_env
   permissions
+  suppress_warnings
   verify
 }
 
