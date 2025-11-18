@@ -220,10 +220,6 @@ echo "-------------------------"
 cat "$METADATA_FILE"
 echo ""
 
-# Contar muestras del metadata
-TOTAL_SAMPLES=$(grep -v "^#SampleID" "$METADATA_FILE" | wc -l)
-echo "Total de muestras en metadata: $TOTAL_SAMPLES"
-echo ""
 
 # ============================================================================
 # PASO 1: PREPROCESAMIENTO CON FASTP
@@ -638,7 +634,6 @@ echo "  ├── results/                (visualizaciones .qzv)"
 echo "  └── metadata.tsv            (información de muestras)"
 echo ""
 echo "Grupos analizados: ${GRUPOS[@]}"
-echo "Total de muestras: $TOTAL_SAMPLES"
 echo "Número de visualizaciones: $NUM_QZV"
 echo ""
 echo "PRÓXIMOS PASOS:"
