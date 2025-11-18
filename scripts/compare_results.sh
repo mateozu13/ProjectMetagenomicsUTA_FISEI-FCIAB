@@ -604,4 +604,117 @@ def main():
     plot_cpu_comparison(summary, output_dir)
     plot_io_comparison(summary, output_dir)
     plot_overall_dashboard(summary, output_dir)
-    plot_step_by_step
+    plot_step_by_step_comparison(df, output_dir)
+    plot_efficiency_analysis(summary, output_dir)
+    
+    # Generar reporte final
+    create_comparison_report(summary, df, output_dir)
+    
+    print("="*60)
+    print(f"\n✓ Comparación completada")
+    print(f"Reporte: {output_dir}/index.html\n")
+
+if __name__ == "__main__":
+    main()
+PYTHON_SCRIPT
+
+# ============================================================================
+# EJECUTAR GENERACIÓN DE GRÁFICOS
+# ============================================================================
+
+/opt/conda/bin/conda run -n qiime2 python "$OUTPUT_DIR/generate_comparison_plots.py" "$CONSOLIDATED_CSV"
+
+if [[ $? -ne 0 ]]; then
+  echo "ERROR: Falló la generación de gráficos"
+  exit 1
+fi
+
+# ============================================================================
+# GENERAR RESUMEN EN TEXTO
+# ============================================================================
+
+echo "Generando resumen en texto..."
+
+SUMMARY_FILE="$OUTPUT_DIR/comparison_summary.txt"
+
+cat > "$SUMMARY_FILE" << EOF
+╔══════════════════════════════════════════════════════════╗
+║         RESUMEN DE COMPARACIÓN DE PROYECTOS              ║
+╚══════════════════════════════════════════════════════════╝
+
+Fecha de comparación: $(date '+%Y-%m-%d %H:%M:%S')
+Número de proyectos: $NUM_PROJECTS
+
+PROYECTOS COMPARADOS
+====================
+EOF
+
+for i in "${!PROJECTS[@]}"; do
+  echo "$((i+1)). ${PROJECTS[$i]}" >> "$SUMMARY_FILE"
+done
+
+cat >> "$SUMMARY_FILE" << EOF
+
+MÉTRICAS POR PROYECTO
+=====================
+EOF
+
+# Agregar métricas de cada proyecto
+for PROJECT in "${PROJECTS[@]}"; do
+  TIMING_FILE="$BASE_DIR/$PROJECT/logs/timing_summary.csv"
+  
+  # Calcular totales
+  TOTAL_TIME=$(awk -F',' 'NR>1 {sum+=$5} END {printf "%.2f", sum}' "$TIMING_FILE")
+  TOTAL_MEM=$(awk -F',' 'NR>1 {sum+=$8} END {printf "%.2f", sum}' "$TIMING_FILE")
+  AVG_CPU=$(awk -F',' 'NR>1 {sum+=$9; count++} END {printf "%.2f", sum/count}' "$TIMING_FILE")
+  TOTAL_IO=$(awk -F',' 'NR>1 {sum+=$12} END {printf "%.2f", sum/1024}' "$TIMING_FILE")
+  
+  cat >> "$SUMMARY_FILE" << EOF
+
+$PROJECT
+────────────────────────────────────────────
+  Tiempo total:      $TOTAL_TIME minutos
+  Memoria total:     $TOTAL_MEM GB
+  CPU promedio:      $AVG_CPU %
+  I/O total:         $TOTAL_IO GB
+EOF
+done
+
+cat >> "$SUMMARY_FILE" << EOF
+
+
+ARCHIVOS GENERADOS
+==================
+- Datos consolidados:  $CONSOLIDATED_CSV
+- Gráficos:            $OUTPUT_DIR/*.html
+- Reporte principal:   $OUTPUT_DIR/index.html
+- Métricas por proyecto: $OUTPUT_DIR/individual_metrics/
+
+═══════════════════════════════════════════════════════════
+Para ver los gráficos comparativos:
+  firefox $OUTPUT_DIR/index.html
+
+Para comparar configuraciones específicas de pasos:
+  Revise los gráficos 06-09 para análisis paso a paso
+═══════════════════════════════════════════════════════════
+EOF
+
+# ============================================================================
+# MOSTRAR RESUMEN FINAL
+# ============================================================================
+
+echo ""
+echo "╔══════════════════════════════════════════════════════╗"
+echo "║         COMPARACIÓN COMPLETADA EXITOSAMENTE          ║"
+echo "╚══════════════════════════════════════════════════════╝"
+echo ""
+cat "$SUMMARY_FILE"
+echo ""
+echo "═══════════════════════════════════════════════════════"
+echo "SIGUIENTE PASO: Ver reporte HTML"
+echo "  firefox $OUTPUT_DIR/index.html"
+echo ""
+echo "O revisar resumen en texto:"
+echo "  cat $SUMMARY_FILE"
+echo "═══════════════════════════════════════════════════════"
+echo ""
