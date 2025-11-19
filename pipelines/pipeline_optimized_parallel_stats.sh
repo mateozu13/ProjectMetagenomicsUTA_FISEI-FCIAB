@@ -26,6 +26,7 @@ mkdir -p "$TMPDIR"
 
 CONDA_RUN="/opt/conda/bin/conda run -n qiime2"
 FASTP_RUN="/opt/conda/bin/conda run -n preproc fastp"
+MULTIQC_RUN="/opt/conda/bin/conda run -n preproc multiqc"
 
 if [[ $# -eq 2 ]] && [[ -f "$2" ]]; then
   echo "Cargando configuración personalizada: $2"
@@ -298,7 +299,7 @@ FASTP_CMD="find '$RAW_DIR' -name '*_R1.fq.gz' | \
 
 run_monitored "fastp_parallel" "$FASTP_CMD"
 
-MULTIQC_CMD="$CONDA_RUN multiqc '$PREPROC_DIR' -o '$PREPROC_DIR/multiqc_report' -n multiqc_fastp_report --force"
+MULTIQC_CMD="$MULTIQC_RUN '$PREPROC_DIR' -o '$PREPROC_DIR/multiqc_report' -n multiqc_fastp_report --force"
 run_monitored "multiqc_fastp" "$MULTIQC_CMD"
 
 BASE_DADA2="$QIIME_DIR/dada2"

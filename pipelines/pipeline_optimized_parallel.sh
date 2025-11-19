@@ -26,6 +26,8 @@ mkdir -p "$TMPDIR"
 
 CONDA_RUN="/opt/conda/bin/conda run -n qiime2"
 FASTP_RUN="/opt/conda/bin/conda run -n preproc fastp"
+MULTIQC_RUN="/opt/conda/bin/conda run -n preproc multiqc"
+
 
 if [[ $# -lt 1 ]]; then
   echo "ERROR: Debe proporcionar el nombre del proyecto"
