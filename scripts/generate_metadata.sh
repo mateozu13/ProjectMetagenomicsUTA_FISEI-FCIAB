@@ -101,8 +101,8 @@ for GRUPO in "${GRUPOS[@]}"; do
       
       # Agregar al metadata
       echo -e "${sample_id}\t${GRUPO}" >> "$METADATA_FILE"
-      ((TOTAL_SAMPLES++))
-      ((SAMPLES_IN_GROUP++))
+      ((TOTAL_SAMPLES+=1))
+      ((SAMPLES_IN_GROUP+=1))
     fi
   done
   
