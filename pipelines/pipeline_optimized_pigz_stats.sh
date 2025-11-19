@@ -7,7 +7,7 @@ FASTP_TRIM_FRONT2=10
 FASTP_CUT_TAIL=true
 FASTP_QUALITY_PHRED=20
 FASTP_LENGTH_REQUIRED=150
-FASTP_THREADS=5
+FASTP_THREADS=16
 FASTP_DETECT_ADAPTERS=true
 
 DADA2_TRIM_LEFT_F=0
@@ -19,7 +19,7 @@ DADA2_MAX_EE_R=2.0
 DADA2_THREADS=16
 
 SAMPLING_DEPTH=6000
-PHYLO_THREADS=5
+PHYLO_THREADS=16
 
 export TMPDIR="/mnt/fast_tmp"
 mkdir -p "$TMPDIR"
@@ -29,7 +29,7 @@ FASTP_RUN="/opt/conda/bin/conda run -n preproc fastp"
 MULTIQC_RUN="/opt/conda/bin/conda run -n preproc multiqc"
 
 if [[ $# -eq 2 ]] && [[ -f "$2" ]]; then
-  echo "Cargando configuración personalizada: $2"
+  echo "Cargando configuracion personalizada: $2"
   source "$2"
 fi
 
@@ -89,7 +89,7 @@ start_monitoring() {
   
   sleep 1
   if ! kill -0 $PIDSTAT_PID 2>/dev/null; then
-    echo "  ADVERTENCIA: pidstat no se inició" >&2
+    echo "  ADVERTENCIA: pidstat no se inicio" >&2
     PIDSTAT_PID=0
   fi
   
@@ -150,17 +150,14 @@ stop_monitoring() {
   echo "$STEP_NAME,$(date -d @$START_TIME '+%Y-%m-%d %H:%M:%S'),$(date -d @$END_TIME '+%Y-%m-%d %H:%M:%S'),$DURATION,$DURATION_MIN,$MAX_MEM_KB,$MAX_MEM_MB,$MAX_MEM_GB,$CPU_PERCENT,$IO_READ_MB,$IO_WRITE_MB,$IO_TOTAL_MB,$EXIT_CODE" >> "$TIMING_LOG"
   
   echo ""
-  echo "  ╔═══════════════════════════════════════╗"
-  echo "   MÉTRICAS: $STEP_NAME"
-  echo "  ╚═══════════════════════════════════════╝"
-  echo "   Duración:      ${DURATION}s (${DURATION_MIN} min)"
-  echo "   Memoria máx:   ${MAX_MEM_MB} MB (${MAX_MEM_GB} GB)"
-  echo "   CPU promedio:  ${CPU_PERCENT}%"
-  echo "   I/O Lectura:   ${IO_READ_MB} MB"
-  echo "   I/O Escritura: ${IO_WRITE_MB} MB"
-  echo "   I/O Total:     ${IO_TOTAL_MB} MB"
-  echo "   Estado:        $([ $EXIT_CODE -eq 0 ] && echo 'Exitoso' || echo "Error ($EXIT_CODE)")"
-  echo "  ═══════════════════════════════════════"
+  echo "  METRICAS: $STEP_NAME"
+  echo "  Duracion:      ${DURATION}s (${DURATION_MIN} min)"
+  echo "  Memoria max:   ${MAX_MEM_MB} MB (${MAX_MEM_GB} GB)"
+  echo "  CPU promedio:  ${CPU_PERCENT}%"
+  echo "  I/O Lectura:   ${IO_READ_MB} MB"
+  echo "  I/O Escritura: ${IO_WRITE_MB} MB"
+  echo "  I/O Total:     ${IO_TOTAL_MB} MB"
+  echo "  Estado:        $([ $EXIT_CODE -eq 0 ] && echo 'Exitoso' || echo "Error ($EXIT_CODE)")"
   echo ""
 }
 
@@ -188,12 +185,12 @@ run_monitored() {
   stop_monitoring "$STEP_NAME" "$MONITOR_INFO" "$EXIT_CODE"
   
   if [[ $EXIT_CODE -ne 0 ]]; then
-    echo "ERROR: $STEP_NAME falló con código $EXIT_CODE"
+    echo "ERROR: $STEP_NAME fallo con codigo $EXIT_CODE"
     echo "Ver logs en: $STEP_LOG"
     return $EXIT_CODE
   fi
   
-  echo "✓ $STEP_NAME completado exitosamente"
+  echo "COMPLETADO: $STEP_NAME completado exitosamente"
   return 0
 }
 
@@ -204,23 +201,23 @@ io_pipeline_start=$(get_system_io)
 IFS='|' read -r PIPELINE_START_IO_READ PIPELINE_START_IO_WRITE <<< "$io_pipeline_start"
 
 echo ""
-echo "╔══════════════════════════════════════════════╗"
-echo "║  PIPELINE OPTIMIZADO CON MONITOREO COMPLETO  ║"
-echo "╚══════════════════════════════════════════════╝"
+echo "=========================================="
+echo "  PIPELINE OPTIMIZADO CON MONITOREO COMPLETO"
+echo "=========================================="
 echo ""
 echo "Proyecto: $PROJECT_NAME"
 echo "Directorio: $PROJECT_DIR"
 echo "Hora de inicio: $PIPELINE_START_DATETIME"
 echo ""
 echo "Logs: $LOGS_DIR"
-echo "Métricas: $METRICS_DIR"
+echo "Metricas: $METRICS_DIR"
 echo ""
 echo "OPTIMIZACIONES ACTIVAS:"
 echo "----------------------"
-echo "✓ GNU Parallel para procesamiento simultáneo"
-echo "✓ pigz para compresión/descompresión paralela"
-echo "✓ tmpfs para archivos temporales"
-echo "✓ Monitoreo detallado de recursos"
+echo "- GNU Parallel para procesamiento simultaneo"
+echo "- pigz para compresion/descompresion paralela"
+echo "- tmpfs para archivos temporales"
+echo "- Monitoreo detallado de recursos"
 echo ""
 
 if [[ ! -d "$PROJECT_DIR" ]]; then
@@ -268,11 +265,11 @@ process_fastp_sample() {
     
     echo "  Procesando: $sample_id ($grupo)" >&2
     
+    pigz -dc "$r1_file" "$r2_file" | \
     $FASTP_RUN \
-        -i "$r1_file" \
-        -I "$r2_file" \
-        -o "$out_r1" \
-        -O "$out_r2" \
+        --stdin \
+        --interleaved_in \
+        --stdout \
         --cut_tail \
         --trim_front1 $FASTP_TRIM_FRONT1 \
         --trim_front2 $FASTP_TRIM_FRONT2 \
@@ -281,7 +278,17 @@ process_fastp_sample() {
         --thread $FASTP_THREADS \
         --detect_adapter_for_pe \
         --json "$json_report" \
-        --html "$html_report" 2>/dev/null
+        --html "$html_report" 2>/dev/null | \
+    pigz -p $FASTP_THREADS > "$out_dir/${sample_id}_filtered_interleaved.fq.gz"
+    
+    pigz -dc "$out_dir/${sample_id}_filtered_interleaved.fq.gz" | \
+    awk 'NR%8<5' | pigz -p 2 > "$out_r1" &
+    
+    pigz -dc "$out_dir/${sample_id}_filtered_interleaved.fq.gz" | \
+    awk 'NR%8>=5' | pigz -p 2 > "$out_r2" &
+    
+    wait
+    rm "$out_dir/${sample_id}_filtered_interleaved.fq.gz"
 }
 
 export -f process_fastp_sample
@@ -362,7 +369,7 @@ mkdir -p "$BASE_PHYLO"
 
 echo ""
 echo "=========================================="
-echo "PASO 3: Árboles filogenéticos PARALELOS"
+echo "PASO 3: Arboles filogeneticos PARALELOS"
 echo "=========================================="
 echo ""
 
@@ -371,7 +378,7 @@ build_phylogeny() {
     local grupo_out="$BASE_PHYLO/$grupo"
     mkdir -p "$grupo_out"
     
-    echo "  Construyendo árbol para: $grupo" >&2
+    echo "  Construyendo arbol para: $grupo" >&2
     
     $CONDA_RUN qiime phylogeny align-to-tree-mafft-fasttree \
         --i-sequences "$BASE_DADA2/$grupo/rep-seqs.qza" \
@@ -391,7 +398,7 @@ run_monitored "phylogeny_parallel" "$PHYLO_CMD"
 
 echo ""
 echo "=========================================="
-echo "PASO 4: Análisis de diversidad comparativo"
+echo "PASO 4: Analisis de diversidad comparativo"
 echo "=========================================="
 echo ""
 
@@ -438,7 +445,7 @@ CORE_METRICS_CMD="$CONDA_RUN qiime diversity core-metrics-phylogenetic \
 run_monitored "core_metrics" "$CORE_METRICS_CMD"
 
 echo ""
-echo "Ejecutando análisis de significancia..."
+echo "Ejecutando analisis de significancia..."
 
 for metric in shannon evenness faith_pd observed_features; do
   [[ -f "$COMBINED_OUT/results/${metric}_vector.qza" ]] && \
@@ -478,7 +485,7 @@ done
 find "$COMBINED_OUT/results" -name "*.qzv" -exec cp {} "$RESULTS_DIR/" \; 2>/dev/null || true
 
 NUM_QZV=$(ls -1 "$RESULTS_DIR"/*.qzv 2>/dev/null | wc -l)
-echo "  ✓ $NUM_QZV visualizaciones copiadas"
+echo "  COMPLETADO: $NUM_QZV visualizaciones copiadas"
 echo ""
 
 PIPELINE_END=$(date +%s)
@@ -501,22 +508,22 @@ TOTAL_MEMORY_MB=$(awk -F',' 'NR>1 {sum+=$7} END {printf "%.2f", sum}' "$TIMING_L
 AVG_CPU=$(awk -F',' 'NR>1 {sum+=$9; count++} END {if(count>0) printf "%.2f", sum/count; else print "0"}' "$TIMING_LOG")
 
 cat > "$PIPELINE_SUMMARY" << EOF
-╔════════════════════════════════════════════════════════╗
-║       RESUMEN COMPLETO DEL PIPELINE OPTIMIZADO         ║
-╚════════════════════════════════════════════════════════╝
+========================================
+  RESUMEN COMPLETO DEL PIPELINE OPTIMIZADO
+========================================
 
-INFORMACIÓN DEL PROYECTO
+INFORMACION DEL PROYECTO
 ========================
 Proyecto:              $PROJECT_NAME
 Directorio:            $PROJECT_DIR
 Grupos analizados:     ${GRUPOS[@]}
 
-TIEMPOS DE EJECUCIÓN
+TIEMPOS DE EJECUCION
 ====================
 Inicio:                $PIPELINE_START_DATETIME
 Fin:                   $PIPELINE_END_DATETIME
-Duración total:        ${HOURS}h ${MINUTES}m ${SECONDS}s
-Duración (minutos):    ${TOTAL_MINUTES} min
+Duracion total:        ${HOURS}h ${MINUTES}m ${SECONDS}s
+Duracion (minutos):    ${TOTAL_MINUTES} min
 
 RECURSOS TOTALES
 ================
@@ -528,16 +535,16 @@ CPU promedio:          ${AVG_CPU}%
 
 OPTIMIZACIONES APLICADAS
 =========================
-✓ Procesamiento paralelo con GNU Parallel (3 jobs simultáneos)
-✓ Compresión/descompresión paralela con pigz
-✓ Construcción paralela de árboles filogenéticos
-✓ Uso de tmpfs para archivos temporales
-✓ Monitoreo detallado de recursos por etapa
+- Procesamiento paralelo con GNU Parallel (3 jobs simultaneos)
+- Compresion/descompresion paralela con pigz
+- Construccion paralela de arboles filogeneticos
+- Uso de tmpfs para archivos temporales
+- Monitoreo detallado de recursos por etapa
 
 ARCHIVOS GENERADOS
 ==================
 Logs:                  $LOGS_DIR
-Métricas:              $METRICS_DIR
+Metricas:              $METRICS_DIR
 Visualizaciones:       $RESULTS_DIR
 Resumen CSV:           $TIMING_LOG
 
@@ -549,19 +556,19 @@ awk -F',' 'NR>1 {printf "%-30s %8.2f min  %10.2f MB  %6.1f%%  %8.2f MB I/O\n", $
 
 cat >> "$PIPELINE_SUMMARY" << EOF
 
-═══════════════════════════════════════════════════════
-Para visualizar gráficos detallados, ejecute:
+========================================
+Para visualizar graficos detallados, ejecute:
   bash generate_plots.sh $PROJECT_NAME
-═══════════════════════════════════════════════════════
+========================================
 EOF
 
 echo ""
-echo "╔══════════════════════════════════════════════════╗"
-echo "║     PIPELINE OPTIMIZADO COMPLETADO EXITOSAMENTE  ║"
-echo "╚══════════════════════════════════════════════════╝"
+echo "=========================================="
+echo "  PIPELINE OPTIMIZADO COMPLETADO EXITOSAMENTE"
+echo "=========================================="
 echo ""
 cat "$PIPELINE_SUMMARY"
 echo ""
-echo "SIGUIENTE PASO: Generar gráficos"
+echo "SIGUIENTE PASO: Generar graficos"
 echo "  bash generate_plots.sh $PROJECT_NAME"
 echo ""
