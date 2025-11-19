@@ -77,7 +77,7 @@ get_system_io() {
 
 start_monitoring() {
   local STEP_NAME=$1
-  local STEP_LOG="$LOGS_DIR/${STEP_NAME}.log"
+  local STEP_LOG="$LOGS_DIR/${STEP_NAME}_time.log"
   local STEP_TIME="$LOGS_DIR/${STEP_NAME}_time.log"
   local STEP_METRICS="$METRICS_DIR/${STEP_NAME}_pidstat.csv"
   
@@ -175,7 +175,7 @@ run_monitored() {
   echo "=========================================="
   echo "Inicio: $(date '+%Y-%m-%d %H:%M:%S')"
   
-  local STEP_LOG="$LOGS_DIR/${STEP_NAME}.log"
+  local STEP_LOG="$LOGS_DIR/${STEP_NAME}_time.log"
   local STEP_TIME="$LOGS_DIR/${STEP_NAME}_time.log"
 
   local MONITOR_INFO=$(start_monitoring "$STEP_NAME")
