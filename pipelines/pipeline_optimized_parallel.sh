@@ -72,14 +72,14 @@ echo ""
 process_fastp_sample() {
     local grupo=$1
     local r1_file=$2
-    local sample_id=$(basename "$r1_file" | sed 's/_R1\.fq\.gz$//')
-    local r2_file="${r1_file/_R1.fq.gz/_R2.fq.gz}"
+    local sample_id=$(basename "$r1_file" | sed 's/_1\.fq\.gz$//')
+    local r2_file="${r1_file/_1.fq.gz/_2.fq.gz}"
     
     local out_dir="$PREPROC_DIR/$grupo"
     mkdir -p "$out_dir"
     
-    local out_r1="$out_dir/${sample_id}_filtered_R1.fq.gz"
-    local out_r2="$out_dir/${sample_id}_filtered_R2.fq.gz"
+    local out_r1="$out_dir/${sample_id}_filtered_1.fq.gz"
+    local out_r2="$out_dir/${sample_id}_filtered_2.fq.gz"
     local json_report="$out_dir/${sample_id}_fastp.json"
     local html_report="$out_dir/${sample_id}_fastp.html"
     
@@ -120,7 +120,7 @@ echo "PASO 1: Preprocesamiento PARALELO con fastp"
 echo "=========================================="
 echo ""
 
-find "$RAW_DIR" -name "*_R1.fq.gz" | \
+find "$RAW_DIR" -name "*_1.fq.gz" | \
 parallel -j 3 --will-cite --eta \
     'grupo=$(basename $(dirname {})); process_fastp_sample "$grupo" {}'
 
@@ -145,9 +145,9 @@ for GRUPO in "${GRUPOS[@]}"; do
   MANIFEST="$GRUPO_OUT/manifest.tsv"
   echo -e "sample-id\tforward-absolute-filepath\treverse-absolute-filepath" > "$MANIFEST"
   
-  for r1 in "$PREPROC_DIR/$GRUPO"/*_R1.fq.gz; do
-    sample=$(basename "$r1" | sed 's/_filtered_R1\.fq\.gz$//')
-    r2="${r1/_R1.fq.gz/_R2.fq.gz}"
+  for r1 in "$PREPROC_DIR/$GRUPO"/*_1.fq.gz; do
+    sample=$(basename "$r1" | sed 's/_filtered_1\.fq\.gz$//')
+    r2="${r1/_1.fq.gz/_2.fq.gz}"
     echo -e "$sample\t$r1\t$r2" >> "$MANIFEST"
   done
   
