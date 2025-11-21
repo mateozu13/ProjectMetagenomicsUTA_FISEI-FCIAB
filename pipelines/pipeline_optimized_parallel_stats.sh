@@ -218,7 +218,6 @@ echo ""
 echo "OPTIMIZACIONES ACTIVAS:"
 echo "----------------------"
 echo "✓ GNU Parallel para procesamiento simultáneo"
-echo "✓ pigz para compresión/descompresión paralela"
 echo "✓ tmpfs para archivos temporales"
 echo "✓ Monitoreo detallado de recursos"
 echo ""
@@ -229,115 +228,145 @@ if [[ ! -d "$PROJECT_DIR" ]]; then
 fi
 
 RAW_DIR="$PROJECT_DIR/raw_sequences"
-PREPROC_DIR="$PROJECT_DIR/preproc"
-QIIME_DIR="$PROJECT_DIR/qiime2_results"
+QIIME_DIR="$PROJECT_DIR/qiime2_analysis"
 RESULTS_DIR="$PROJECT_DIR/results"
 METADATA_FILE="$PROJECT_DIR/metadata.tsv"
 
-mkdir -p "$PREPROC_DIR"
+if [[ ! -d "$RAW_DIR" ]]; then
+  echo "ERROR: No existe el directorio raw_sequences: $RAW_DIR"
+  exit 1
+fi
+
+if [[ ! -f "$METADATA_FILE" ]]; then
+  echo "ERROR: No existe el archivo metadata.tsv: $METADATA_FILE"
+  echo "Ejecute primero: bash generate_metadata.sh $PROJECT_NAME"
+  exit 1
+fi
+
 mkdir -p "$QIIME_DIR"
 mkdir -p "$RESULTS_DIR"
 
-echo "Detectando grupos de muestras..."
-GRUPOS=()
-while IFS= read -r dir; do
-  GRUPOS+=("$(basename "$dir")")
-done < <(find "$RAW_DIR" -mindepth 1 -maxdepth 1 -type d | sort)
+GRUPOS=($(find "$RAW_DIR" -mindepth 1 -maxdepth 1 -type d -exec basename {} \; | sort))
 
 if [[ ${#GRUPOS[@]} -eq 0 ]]; then
-  echo "ERROR: No se encontraron subdirectorios en raw_sequences/"
+  echo "ERROR: No se encontraron subdirectorios en $RAW_DIR"
   exit 1
 fi
 
 echo "Grupos detectados: ${GRUPOS[@]}"
 echo ""
 
-process_fastp_sample() {
-    local grupo=$1
-    local r1_file=$2
-    local sample_id=$(basename "$r1_file" | sed 's/_1\.fq\.gz$//')
-    local r2_file="${r1_file/_1.fq.gz/_2.fq.gz}"
-    
-    local out_dir="$PREPROC_DIR/$grupo"
-    mkdir -p "$out_dir"
-    
-    local out_r1="$out_dir/${sample_id}_filtered_1.fq.gz"
-    local out_r2="$out_dir/${sample_id}_filtered_2.fq.gz"
-    local json_report="$out_dir/${sample_id}_fastp.json"
-    local html_report="$out_dir/${sample_id}_fastp.html"
-    
-    echo "  Procesando: $sample_id ($grupo)" >&2
-    
-    $FASTP_RUN \
-        -i "$r1_file" \
-        -I "$r2_file" \
-        -o "$out_r1" \
-        -O "$out_r2" \
-        --cut_tail \
-        --trim_front1 $FASTP_TRIM_FRONT1 \
-        --trim_front2 $FASTP_TRIM_FRONT2 \
-        --qualified_quality_phred $FASTP_QUALITY_PHRED \
-        --length_required $FASTP_LENGTH_REQUIRED \
-        --thread $FASTP_THREADS \
-        --detect_adapter_for_pe \
-        --json "$json_report" \
-        --html "$html_report" 2>/dev/null
-}
-
-export -f process_fastp_sample
-export PREPROC_DIR FASTP_RUN FASTP_THREADS FASTP_TRIM_FRONT1 FASTP_TRIM_FRONT2
-export FASTP_QUALITY_PHRED FASTP_LENGTH_REQUIRED
-
+echo ""
 echo "=========================================="
-echo "PASO 1: Preprocesamiento PARALELO con fastp"
+echo "PASO 1: Control de calidad (Global)"
 echo "=========================================="
 echo ""
 
-FASTP_CMD="find '$RAW_DIR' -name '*_1.fq.gz' | \
-    parallel -j 3 --will-cite --eta \
-    'grupo=\$(basename \$(dirname {})); process_fastp_sample \"\$grupo\" {}'"
+QC_DIR="$PROJECT_DIR/qc_reports"
+CLEAN_DIR="$PROJECT_DIR/cleaned_sequences"
+mkdir -p "$QC_DIR"
+mkdir -p "$CLEAN_DIR"
 
-run_monitored "fastp_parallel" "$FASTP_CMD"
+process_fastp_sample() {
+  local fq1=$1
+  local fq2=$2
+  local sample_id=$3
+  local grupo=$4
+    
+  local out_dir="$CLEAN_DIR/$grupo"
+    mkdir -p "$out_dir"
+    
+  local out1="$out_dir/${sample_id}_1.fq.gz"
+  local out2="$out_dir/${sample_id}_2.fq.gz"
+  local json="$QC_DIR/${sample_id}_fastp.json"
+  local html="$QC_DIR/${sample_id}_fastp.html"
+    
+    $FASTP_RUN \
+    -i "$fq1" -I "$fq2" \
+    -o "$out1" -O "$out2" \
+        --trim_front1 $FASTP_TRIM_FRONT1 \
+        --trim_front2 $FASTP_TRIM_FRONT2 \
+    $([ "$FASTP_CUT_TAIL" = true ] && echo "--cut_tail") \
+        --qualified_quality_phred $FASTP_QUALITY_PHRED \
+        --length_required $FASTP_LENGTH_REQUIRED \
+        --thread $FASTP_THREADS \
+    $([ "$FASTP_DETECT_ADAPTERS" = true ] && echo "--detect_adapter_for_pe") \
+    --json "$json" \
+    --html "$html" \
+    --compression 6 \
+    2>&1
+  
+  echo "  ✓ $sample_id procesado" >&2
+}
 
-MULTIQC_CMD="$MULTIQC_RUN '$PREPROC_DIR' -o '$PREPROC_DIR/multiqc_report' -n multiqc_fastp_report --force"
-run_monitored "multiqc_fastp" "$MULTIQC_CMD"
+export -f process_fastp_sample
+export FASTP_RUN CLEAN_DIR QC_DIR FASTP_TRIM_FRONT1 FASTP_TRIM_FRONT2 FASTP_CUT_TAIL FASTP_QUALITY_PHRED FASTP_LENGTH_REQUIRED FASTP_THREADS FASTP_DETECT_ADAPTERS
+
+ALL_SAMPLES_LIST="$TMPDIR/all_samples_list.txt"
+> "$ALL_SAMPLES_LIST"
+
+for GRUPO in "${GRUPOS[@]}"; do
+  GRUPO_RAW="$RAW_DIR/$GRUPO"
+  for fq1 in "$GRUPO_RAW"/*_1.fq.gz; do
+    if [[ -f "$fq1" ]]; then
+      fq2="${fq1/_1.fq.gz/_2.fq.gz}"
+      [[ -f "$fq2" ]] || continue
+      sample_id=$(basename "$fq1" | sed 's/_1\.fq\.gz$//')
+      echo "$fq1|$fq2|$sample_id|$GRUPO" >> "$ALL_SAMPLES_LIST"
+    fi
+  done
+done
+
+FASTP_CMD="cat '$ALL_SAMPLES_LIST' | parallel -j 3 --colsep '|' --will-cite 'process_fastp_sample {1} {2} {3} {4}'"
+run_monitored "Preproc_Global" "$FASTP_CMD"
+
+MULTIQC_CMD="$MULTIQC_RUN '$QC_DIR' -o '$QC_DIR' -n multiqc_report --force"
+run_monitored "Reporte_QC" "$MULTIQC_CMD"
+
+echo ""
+echo "=========================================="
+echo "PASO 2: DADA2 (Denoising por grupo)"
+echo "=========================================="
+echo ""
 
 BASE_DADA2="$QIIME_DIR/dada2"
 mkdir -p "$BASE_DADA2"
 
-echo ""
-echo "=========================================="
-echo "PASO 2: DADA2 denoising"
-echo "=========================================="
-echo ""
-
 for GRUPO in "${GRUPOS[@]}"; do
+  echo ""
   echo "Procesando grupo: $GRUPO"
+  echo "----------------------------------------"
   
+  GRUPO_CLEAN="$CLEAN_DIR/$GRUPO"
   GRUPO_OUT="$BASE_DADA2/$GRUPO"
   mkdir -p "$GRUPO_OUT"
   
   MANIFEST="$GRUPO_OUT/manifest.tsv"
   echo -e "sample-id\tforward-absolute-filepath\treverse-absolute-filepath" > "$MANIFEST"
   
-  for r1 in "$PREPROC_DIR/$GRUPO"/*_filtered_1.fq.gz; do
-    if [[ -f "$r1" ]]; then
-      sample=$(basename "$r1" | sed 's/_filtered_1\.fq\.gz$//')
-      r2="${r1/_1.fq.gz/_2.fq.gz}"
-      echo -e "$sample\t$r1\t$r2" >> "$MANIFEST"
+  for fq1 in "$GRUPO_CLEAN"/*_1.fq.gz; do
+    if [[ -f "$fq1" ]]; then
+      fq2="${fq1/_1.fq.gz/_2.fq.gz}"
+      [[ -f "$fq2" ]] || continue
+      sample_id=$(basename "$fq1" | sed 's/_1\.fq\.gz$//')
+      echo -e "${sample_id}\t${fq1}\t${fq2}" >> "$MANIFEST"
     fi
   done
   
   IMPORT_CMD="$CONDA_RUN qiime tools import \
     --type 'SampleData[PairedEndSequencesWithQuality]' \
     --input-path '$MANIFEST' \
-    --input-format PairedEndFastqManifestPhred33V2 \
-    --output-path '$GRUPO_OUT/paired-end-demux.qza'"
+    --output-path '$GRUPO_OUT/demux.qza' \
+    --input-format PairedEndFastqManifestPhred33V2"
   
-  run_monitored "import_${GRUPO}" "$IMPORT_CMD"
+  run_monitored "Importar_${GRUPO}" "$IMPORT_CMD"
+  
+  $CONDA_RUN qiime demux summarize \
+    --i-data "$GRUPO_OUT/demux.qza" \
+    --o-visualization "$GRUPO_OUT/demux.qzv"
   
   DADA2_CMD="$CONDA_RUN qiime dada2 denoise-paired \
-    --i-demultiplexed-seqs '$GRUPO_OUT/paired-end-demux.qza' \
+    --i-demultiplexed-seqs '$GRUPO_OUT/demux.qza' \
     --p-trim-left-f $DADA2_TRIM_LEFT_F \
     --p-trim-left-r $DADA2_TRIM_LEFT_R \
     --p-trunc-len-f $DADA2_TRUNC_LEN_F \
@@ -350,7 +379,7 @@ for GRUPO in "${GRUPOS[@]}"; do
     --o-denoising-stats '$GRUPO_OUT/denoising-stats.qza' \
     --verbose"
   
-  run_monitored "dada2_${GRUPO}" "$DADA2_CMD"
+  run_monitored "Denoising_${GRUPO}" "$DADA2_CMD"
   
   $CONDA_RUN qiime metadata tabulate \
     --m-input-file "$GRUPO_OUT/denoising-stats.qza" \
@@ -362,7 +391,7 @@ mkdir -p "$BASE_PHYLO"
 
 echo ""
 echo "=========================================="
-echo "PASO 3: Árboles filogenéticos PARALELOS"
+echo "PASO 3: Árboles filogenéticos"
 echo "=========================================="
 echo ""
 
@@ -370,8 +399,6 @@ build_phylogeny() {
     local grupo=$1
     local grupo_out="$BASE_PHYLO/$grupo"
     mkdir -p "$grupo_out"
-    
-    echo "  Construyendo árbol para: $grupo" >&2
     
     $CONDA_RUN qiime phylogeny align-to-tree-mafft-fasttree \
         --i-sequences "$BASE_DADA2/$grupo/rep-seqs.qza" \
@@ -387,11 +414,11 @@ export -f build_phylogeny
 export BASE_PHYLO BASE_DADA2 CONDA_RUN PHYLO_THREADS
 
 PHYLO_CMD="echo '${GRUPOS[@]}' | tr ' ' '\n' | parallel -j 3 --will-cite 'build_phylogeny {}'"
-run_monitored "phylogeny_parallel" "$PHYLO_CMD"
+run_monitored "Arboles_Paralelos" "$PHYLO_CMD"
 
 echo ""
 echo "=========================================="
-echo "PASO 4: Análisis de diversidad comparativo"
+echo "PASO 4: Diversidad y Análisis FINAL"
 echo "=========================================="
 echo ""
 
@@ -406,7 +433,7 @@ for GRUPO in "${GRUPOS[@]}"; do
 done
 MERGE_TABLES_CMD="$MERGE_TABLES_CMD --o-merged-table $COMBINED_OUT/merged_table.qza"
 
-run_monitored "merge_tables" "$MERGE_TABLES_CMD"
+run_monitored "Unir_Tablas" "$MERGE_TABLES_CMD"
 
 MERGE_SEQS_CMD="$CONDA_RUN qiime feature-table merge-seqs"
 for GRUPO in "${GRUPOS[@]}"; do
@@ -414,7 +441,7 @@ for GRUPO in "${GRUPOS[@]}"; do
 done
 MERGE_SEQS_CMD="$MERGE_SEQS_CMD --o-merged-data $COMBINED_OUT/merged_rep-seqs.qza"
 
-run_monitored "merge_sequences" "$MERGE_SEQS_CMD"
+run_monitored "Unir_Secuencias" "$MERGE_SEQS_CMD"
 
 PHYLO_COMBINED_CMD="$CONDA_RUN qiime phylogeny align-to-tree-mafft-fasttree \
   --i-sequences '$COMBINED_OUT/merged_rep-seqs.qza' \
@@ -425,7 +452,7 @@ PHYLO_COMBINED_CMD="$CONDA_RUN qiime phylogeny align-to-tree-mafft-fasttree \
   --o-rooted-tree '$COMBINED_OUT/rooted-tree.qza' \
   --verbose"
 
-run_monitored "phylogeny_combined" "$PHYLO_COMBINED_CMD"
+run_monitored "Arbol_Final" "$PHYLO_COMBINED_CMD"
 
 CORE_METRICS_CMD="$CONDA_RUN qiime diversity core-metrics-phylogenetic \
   --i-table '$COMBINED_OUT/merged_table.qza' \
@@ -435,7 +462,7 @@ CORE_METRICS_CMD="$CONDA_RUN qiime diversity core-metrics-phylogenetic \
   --output-dir '$COMBINED_OUT/results' \
   --verbose"
 
-run_monitored "core_metrics" "$CORE_METRICS_CMD"
+run_monitored "Metricas_Core" "$CORE_METRICS_CMD"
 
 echo ""
 echo "Ejecutando análisis de significancia..."
@@ -458,16 +485,22 @@ for metric in unweighted_unifrac weighted_unifrac bray_curtis jaccard; do
       --p-pairwise
 done
 
+echo ""
+echo "=========================================="
+echo "GENERANDO ALPHA RAREFACTION"
+echo "=========================================="
+
 $CONDA_RUN qiime diversity alpha-rarefaction \
   --i-table "$COMBINED_OUT/merged_table.qza" \
   --i-phylogeny "$COMBINED_OUT/rooted-tree.qza" \
   --m-metadata-file "$METADATA_FILE" \
   --p-max-depth $SAMPLING_DEPTH \
+  --p-steps 20 \
   --o-visualization "$COMBINED_OUT/results/alpha-rarefaction.qzv"
 
 echo ""
 echo "=========================================="
-echo "PASO 5: Copiando visualizaciones"
+echo "PASO 5: Copiando resultados finales"
 echo "=========================================="
 
 for GRUPO in "${GRUPOS[@]}"; do
@@ -529,7 +562,6 @@ CPU promedio:          ${AVG_CPU}%
 OPTIMIZACIONES APLICADAS
 =========================
 ✓ Procesamiento paralelo con GNU Parallel (3 jobs simultáneos)
-✓ Compresión/descompresión paralela con pigz
 ✓ Construcción paralela de árboles filogenéticos
 ✓ Uso de tmpfs para archivos temporales
 ✓ Monitoreo detallado de recursos por etapa
