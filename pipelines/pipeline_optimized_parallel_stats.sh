@@ -257,7 +257,11 @@ METADATA_FILE="$PROJECT_DIR/metadata.tsv"
 mkdir -p "$QIIME_DIR"
 mkdir -p "$RESULTS_DIR"
 
-GRUPOS=($(find "$RAW_DIR" -mindepth 1 -maxdepth 1 -type d -exec basename {} \; | sort))
+GRUPOS=()
+while IFS= read -r dir; do
+    GRUPOS+=("$(basename "$dir")")
+done < <(find "$RAW_DIR" -mindepth 1 -maxdepth 1 -type d | sort)
+
 echo "Grupos detectados: ${GRUPOS[@]}"
 echo ""
 
@@ -266,6 +270,7 @@ echo "=========================================="
 echo "PASO 1: Control de calidad con fastp"
 echo "=========================================="
 echo ""
+
 QC_DIR="$PROJECT_DIR/qc_reports"
 CLEAN_DIR="$PROJECT_DIR/cleaned_sequences"
 mkdir -p "$QC_DIR"
@@ -289,17 +294,21 @@ process_fastp_sample() {
   local json="$QC_DIR/${sample_id}_fastp.json"
   local html="$QC_DIR/${sample_id}_fastp.html"
 
-  "$FASTP_BIN" \
-    -i "$fq1" -I "$fq2" \
-    -o "$out1" -O "$out2" \
-    --trim_front1 $FASTP_TRIM_FRONT1 --trim_front2 $FASTP_TRIM_FRONT2 \
-    $([ "$FASTP_CUT_TAIL" = true ] && echo "--cut_tail") \
-    --qualified_quality_phred $FASTP_QUALITY_PHRED \
-    --length_required $FASTP_LENGTH_REQUIRED \
-    --thread $FASTP_THREADS \
-    $([ "$FASTP_DETECT_ADAPTERS" = true ] && echo "--detect_adapter_for_pe") \
-    --json "$json" \
-    --html "$html" 2>/dev/null
+  local fastp_cmd="$FASTP_BIN -i '$fq1' -I '$fq2' -o '$out1' -O '$out2' --trim_front1 $FASTP_TRIM_FRONT1 --trim_front2 $FASTP_TRIM_FRONT2"
+  
+  if [ "$FASTP_CUT_TAIL" = true ]; then
+      fastp_cmd="$fastp_cmd --cut_tail"
+  fi
+  
+  fastp_cmd="$fastp_cmd --qualified_quality_phred $FASTP_QUALITY_PHRED --length_required $FASTP_LENGTH_REQUIRED --thread $FASTP_THREADS"
+  
+  if [ "$FASTP_DETECT_ADAPTERS" = true ]; then
+      fastp_cmd="$fastp_cmd --detect_adapter_for_pe"
+  fi
+  
+  fastp_cmd="$fastp_cmd --json '$json' --html '$html'"
+  
+  eval $fastp_cmd 2>/dev/null
 }
 
 export -f process_fastp_sample
@@ -335,6 +344,7 @@ echo "=========================================="
 echo "PASO 3: DADA2 (Denoising)"
 echo "=========================================="
 echo ""
+
 BASE_DADA2="$QIIME_DIR/dada2"
 mkdir -p "$BASE_DADA2"
 ALL_SAMPLES_OUT="$BASE_DADA2/todas_muestras"
