@@ -4,8 +4,8 @@
 # Incluye: Preprocesamiento con fastp, DADA2, filogenia y análisis de diversidad
 # 
 # Uso: bash qiime2_complete_pipeline.sh <nombre_proyecto> [config_file]
-# Ejemplo: bash qiime2_complete_pipeline.sh Proyecto1_20241113
-# Ejemplo con config: bash qiime2_complete_pipeline.sh Proyecto1_20241113 custom_config.sh
+# Ejemplo: bash pipeline1.sh Proyecto_20251201
+# Ejemplo con config: bash pipeline1.sh Proyecto_20251201 custom_config.sh
 ################################################################################
 
 set -euo pipefail
