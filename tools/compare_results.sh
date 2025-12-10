@@ -2,9 +2,10 @@
 ################################################################################
 # Script para comparar rendimiento entre múltiples proyectos QIIME2
 # Genera gráficos comparativos de tiempo, memoria, CPU e I/O
+# Adaptado para: Pipeline Optimizado con Métricas Agrupadas
 # 
 # Uso: bash compare_results.sh <proyecto1> <proyecto2> [proyecto3] ...
-# Ejemplo: bash compare_results.sh Proyecto1_20251113 Proyecto2_20251114
+# Ejemplo: bash compare_results.sh Proyecto_Normal Proyecto_Optimizado
 ################################################################################
 
 set -euo pipefail
@@ -19,8 +20,7 @@ if [[ $# -lt 2 ]]; then
   echo "Uso: bash $0 <proyecto1> <proyecto2> [proyecto3] ..."
   echo ""
   echo "Ejemplo:"
-  echo "  bash $0 Proyecto1_20241113 Proyecto2_20241114"
-  echo "  bash $0 Config_Default Config_Optimizado Config_MaxThreads"
+  echo "  bash $0 Proyecto_Base Proyecto_Optimizado"
   echo ""
   exit 1
 fi
@@ -68,8 +68,7 @@ for PROJECT in "${PROJECTS[@]}"; do
   TIMING_FILE="$PROJECT_DIR/logs/timing_summary.csv"
   if [[ ! -f "$TIMING_FILE" ]]; then
     echo "ERROR: No se encontró timing_summary.csv en $PROJECT"
-    echo "Debe ejecutar el pipeline monitoreado primero:"
-    echo "  bash pipeline1_stats.sh $PROJECT"
+    echo "Debe ejecutar el pipeline monitoreado primero."
     exit 1
   fi
   
@@ -85,14 +84,16 @@ echo "Consolidando datos..."
 
 # Crear CSV consolidado con todos los datos
 CONSOLIDATED_CSV="$OUTPUT_DIR/consolidated_metrics.csv"
-echo "project,step,duration_seconds,duration_minutes,max_memory_kb,max_memory_mb,max_memory_gb,cpu_percent,io_read_mb,io_write_mb,io_total_mb,exit_status" > "$CONSOLIDATED_CSV"
+echo "project,step,start_time,end_time,duration_seconds,duration_minutes,max_memory_kb,max_memory_mb,max_memory_gb,cpu_percent,io_read_mb,io_write_mb,io_total_mb,exit_status" > "$CONSOLIDATED_CSV"
 
 for PROJECT in "${PROJECTS[@]}"; do
   TIMING_FILE="$BASE_DIR/$PROJECT/logs/timing_summary.csv"
   
   # Agregar datos saltando el encabezado
-  tail -n +2 "$TIMING_FILE" | while IFS=',' read -r step start_time end_time duration_sec duration_min max_mem_kb max_mem_mb max_mem_gb cpu_pct io_read io_write io_total exit_code; do
-    echo "$PROJECT,$step,$duration_sec,$duration_min,$max_mem_kb,$max_mem_mb,$max_mem_gb,$cpu_pct,$io_read,$io_write,$io_total,$exit_code" >> "$CONSOLIDATED_CSV"
+  tail -n +2 "$TIMING_FILE" | while IFS=, read -r step start end dur_s dur_m mem_kb mem_mb mem_gb cpu io_r io_w io_t exit_c; do
+    if [[ -n "$step" ]]; then
+        echo "$PROJECT,$step,$start,$end,$dur_s,$dur_m,$mem_kb,$mem_mb,$mem_gb,$cpu,$io_r,$io_w,$io_t,$exit_c" >> "$CONSOLIDATED_CSV"
+    fi
   done
 done
 
@@ -180,7 +181,7 @@ def plot_total_time_comparison(summary, output_dir):
         textposition='outside',
         marker=dict(
             color=colors[:len(summary)],
-            line=dict(color='black', width=2)
+            line=dict(color='black', width=1)
         ),
         hovertemplate='<b>%{x}</b><br>Tiempo total: %{y:.2f} min<extra></extra>'
     ))
@@ -217,7 +218,7 @@ def plot_memory_comparison(summary, output_dir):
             showscale=True,
             colorbar=dict(title="GB")
         ),
-        hovertemplate='<b>%{x}</b><br>Memoria total: %{y:.2f} GB<extra></extra>'
+        hovertemplate='<b>%{x}</b><br>Memoria Acumulada: %{y:.2f} GB<extra></extra>'
     ))
     
     avg_mem = summary['total_memory_gb'].mean()
@@ -225,9 +226,9 @@ def plot_memory_comparison(summary, output_dir):
                   annotation_text=f"Promedio: {avg_mem:.2f} GB")
     
     fig.update_layout(
-        title='Comparación de Uso Acumulado de Memoria<br><sub>Suma de memoria máxima en cada paso</sub>',
+        title='Comparación de Uso Acumulado de Memoria<br><sub>Suma de picos de memoria de todos los pasos</sub>',
         xaxis_title='Proyecto',
-        yaxis_title='Memoria Total (GB)',
+        yaxis_title='Memoria Acumulada (GB)',
         template='plotly_white',
         height=600,
         showlegend=False
@@ -259,7 +260,7 @@ def plot_cpu_comparison(summary, output_dir):
                   annotation_text=f"Promedio: {avg_cpu:.1f}%")
     
     fig.update_layout(
-        title='Comparación de Uso Promedio de CPU<br><sub>Mayor utilización indica mejor aprovechamiento</sub>',
+        title='Comparación de Uso Promedio de CPU<br><sub>Mayor porcentaje indica mejor paralelización</sub>',
         xaxis_title='Proyecto',
         yaxis_title='CPU Promedio (%)',
         template='plotly_white',
@@ -308,17 +309,18 @@ def plot_overall_dashboard(summary, output_dir):
     """Dashboard comparativo general"""
     fig = make_subplots(
         rows=2, cols=2,
-        subplot_titles=('Tiempo Total', 'Memoria Total', 'CPU Promedio', 'I/O Total'),
+        subplot_titles=('Tiempo Total', 'Memoria Acumulada', 'CPU Promedio', 'I/O Total'),
         specs=[[{'type': 'bar'}, {'type': 'bar'}],
                [{'type': 'bar'}, {'type': 'bar'}]]
     )
     
     colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8']
+    color_list = colors[:len(summary)]
     
     # Tiempo
     fig.add_trace(
         go.Bar(x=summary['project'], y=summary['total_time_min'],
-               marker=dict(color=colors[:len(summary)]),
+               marker=dict(color=color_list),
                text=[f"{v:.1f}" for v in summary['total_time_min']],
                textposition='outside',
                showlegend=False),
@@ -328,7 +330,7 @@ def plot_overall_dashboard(summary, output_dir):
     # Memoria
     fig.add_trace(
         go.Bar(x=summary['project'], y=summary['total_memory_gb'],
-               marker=dict(color=colors[:len(summary)]),
+               marker=dict(color=color_list),
                text=[f"{v:.1f}" for v in summary['total_memory_gb']],
                textposition='outside',
                showlegend=False),
@@ -338,7 +340,7 @@ def plot_overall_dashboard(summary, output_dir):
     # CPU
     fig.add_trace(
         go.Bar(x=summary['project'], y=summary['avg_cpu_percent'],
-               marker=dict(color=colors[:len(summary)]),
+               marker=dict(color=color_list),
                text=[f"{v:.1f}" for v in summary['avg_cpu_percent']],
                textposition='outside',
                showlegend=False),
@@ -348,7 +350,7 @@ def plot_overall_dashboard(summary, output_dir):
     # I/O
     fig.add_trace(
         go.Bar(x=summary['project'], y=summary['total_io_gb'],
-               marker=dict(color=colors[:len(summary)]),
+               marker=dict(color=color_list),
                text=[f"{v:.1f}" for v in summary['total_io_gb']],
                textposition='outside',
                showlegend=False),
@@ -377,11 +379,10 @@ def plot_step_by_step_comparison(df, output_dir):
     common_steps = set.intersection(*steps_per_project.values)
     
     if not common_steps:
-        print("⚠️  No hay pasos comunes entre todos los proyectos")
-        return
-    
-    # Filtrar solo pasos comunes
-    df_common = df[df['step'].isin(common_steps)]
+        print("⚠️  No hay pasos comunes idénticos. Generando gráfico con todos los pasos.")
+        df_common = df
+    else:
+        df_common = df
     
     # Crear gráfico por métrica
     metrics = [
@@ -395,7 +396,9 @@ def plot_step_by_step_comparison(df, output_dir):
         fig = go.Figure()
         
         for project in df_common['project'].unique():
-            project_data = df_common[df_common['project'] == project].sort_values('step')
+            project_data = df_common[df_common['project'] == project]
+            if 'start_time' in project_data.columns:
+                project_data = project_data.sort_values('start_time')
             
             fig.add_trace(go.Scatter(
                 x=project_data['step'],
@@ -448,20 +451,20 @@ def plot_efficiency_analysis(summary, output_dir):
         text=summary['project'],
         textposition='top center',
         marker=dict(
-            size=summary['total_io_gb'] * 5,
+            size=summary['total_io_gb'] * 5 + 10,
             color=summary['efficiency_score'],
             colorscale='RdYlGn_r',
             showscale=True,
             colorbar=dict(title="Score<br>Eficiencia"),
             line=dict(color='black', width=2)
         ),
-        hovertemplate='<b>%{text}</b><br>Tiempo: %{x:.2f} min<br>Memoria: %{y:.2f} GB<br>I/O: %{marker.size:.2f} GB<extra></extra>'
+        hovertemplate='<b>%{text}</b><br>Tiempo: %{x:.2f} min<br>Memoria: %{y:.2f} GB<br>I/O: %{marker.size:.2f} (escala)<extra></extra>'
     ))
     
     fig.update_layout(
-        title='Análisis de Eficiencia: Tiempo vs Memoria<br><sub>Tamaño del marcador = I/O, Color = Score de eficiencia</sub>',
+        title='Análisis de Eficiencia: Tiempo vs Memoria<br><sub>Tamaño = I/O, Color = Score (Verde=Más eficiente)</sub>',
         xaxis_title='Tiempo Total (minutos)',
-        yaxis_title='Memoria Total (GB)',
+        yaxis_title='Memoria Acumulada (GB)',
         template='plotly_white',
         height=700
     )
@@ -495,6 +498,21 @@ h2{{color:#34495e;margin-top:40px;border-left:5px solid #3498db;padding-left:15p
 .graph-card{{background:white;border-radius:12px;padding:20px;box-shadow:0 4px 6px rgba(0,0,0,0.1);border:1px solid #e0e0e0;}}
 .graph-card:hover{{transform:translateY(-5px);box-shadow:0 12px 24px rgba(0,0,0,0.15);}}
 .graph-card h3{{color:#2980b9;margin-top:0;}}
+.graph-card a {{
+            display: inline-block;
+            margin: 10px 0;
+            padding: 10px 20px;
+            background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+            color: white;
+            text-decoration: none;
+            border-radius: 6px;
+            transition: all 0.3s;
+            font-weight: 500;
+        }}
+        .graph-card a:hover {{
+            background: linear-gradient(135deg, #2980b9 0%, #1c5d8b 100%);
+            transform: scale(1.05);
+        }}
 iframe{{width:100%;height:600px;border:2px solid #ddd;border-radius:8px;margin:10px 0;}}
 table{{width:100%;border-collapse:collapse;margin:20px 0;}}
 th,td{{padding:12px;text-align:left;border-bottom:1px solid #ddd;}}
@@ -540,10 +558,13 @@ tr:hover{{background:#f5f5f5;}}
     
     for plot_file in html_files:
         plot_name = plot_file.replace('.html', '').replace('_', ' ').title()
-        html_content += f"""<div class="graph-card">
-<h3>{plot_name}</h3>
-<iframe src="{plot_file}"></iframe>
-</div>"""
+        html_content += f"""
+        <div class="graph-card">
+            <h3>{plot_name}</h3>
+            <a href="{plot_file}" target="_blank">🔍 Ver en pantalla completa →</a>
+            <iframe src="{plot_file}"></iframe>
+        </div>
+"""
     
     html_content += """</div>
 
