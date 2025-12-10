@@ -108,7 +108,7 @@ if [[ ! -d "$PROJECT_DIR" ]]; then
 fi
 
 RAW_DIR="$PROJECT_DIR/raw_sequences"
-QIIME_DIR="$PROJECT_DIR/qiime2_analysis"
+QIIME_DIR="$PROJECT_DIR/qiime2_results"
 RESULTS_DIR="$PROJECT_DIR/results"
 METADATA_FILE="$PROJECT_DIR/metadata.tsv"
 

@@ -222,36 +222,54 @@ df -h | grep fast_tmp
 ```
 /home/proyecto/<nombre_proyecto>/
 │
-├── raw_sequences/          # Secuencias crudas (FASTQ)
-│   ├── Crohn/
-│   │   ├── sample1_1.fq.gz
-│   │   ├── sample1_2.fq.gz
-│   │   └── ...
+├── raw_sequences/                    # Secuencias crudas originales
 │   ├── Colitis/
-│   └── Control/
+│   ├── Control/
+│   └── Crohn/
 │
-├── metadata.tsv            # Metadatos de las muestras
-│
-├── preproc/               # Secuencias preprocesadas
-│   ├── Crohn/
+├── cleaned_sequences/                # Secuencias filtradas con fastp
 │   ├── Colitis/
-│   └── Control/
+│   ├── Control/
+│   └── Crohn/
 │
-├── qiime2_results/        # Resultados de QIIME2
-│   ├── dada2/            # ASVs y estadísticas
-│   ├── phylogeny/        # Árboles filogenéticos
-│   └── core_diversity/   # Análisis de diversidad
+├── qc_reports/                       # Reportes de control de calidad
+│   ├── *_fastp.html
+│   ├── *_fastp.json
+│   ├── multiqc_report.html
+│   └── multiqc_report_data/
 │
-├── results/               # Visualizaciones (.qzv)
+├── qiime2_results/                   # Análisis QIIME2
+│   │
+│   ├── dada2/                        # Resultados DADA2
+│   │   └── todas_muestras/           # Procesamiento unificado
+│   │       ├── demux.qza
+│   │       ├── table.qza
+│   │       └── ...
+│   │
+│   ├── phylogeny/                    # Árboles filogenéticos
+│   │   ├── aligned-rep-seqs.qza
+│   │   ├── masked-aligned-rep-seqs.qza
+│   │   ├── unrooted-tree.qza
+│   │   └── rooted-tree.qza
+│   │
+│   └── core_diversity/               # Análisis de diversidad
+│       ├── rarefied_table.qza
+│       ├── shannon_vector.qza
+│       └── ...
 │
-├── logs/                  # Logs del pipeline (solo en _stats)
-│   ├── pipeline_master.log
+├── results/                          # Visualizaciones finales
+├── logs/                             # Logs de ejecución (solo _stats)
 │   ├── timing_summary.csv
-│   └── step_*.log
+│   ├── *_time.log
+│   └── *_iostat.log
 │
-└── metrics/              # Métricas detalladas (solo en _stats)
-    ├── system_summary.csv
-    └── resource_*.csv
+├── metrics/                          # Métricas de recursos (solo _stats)
+│   ├── system_summary.csv
+│   └── *_pidstat.csv
+│
+├── performance_plots/                # Gráficos de rendimiento (solo _stats)
+├── metadata.tsv                      # Metadatos originales
+└── metadata_individual_samples.tsv   # Metadatos con columna individual
 ```
 
 ---

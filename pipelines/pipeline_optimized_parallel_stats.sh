@@ -253,7 +253,7 @@ if [[ ! -d "$PROJECT_DIR" ]]; then
 fi
 
 export RAW_DIR="$PROJECT_DIR/raw_sequences"
-export QIIME_DIR="$PROJECT_DIR/qiime2_analysis"
+export QIIME_DIR="$PROJECT_DIR/qiime2_results"
 export RESULTS_DIR="$PROJECT_DIR/results"
 export METADATA_FILE="$PROJECT_DIR/metadata.tsv"
 
