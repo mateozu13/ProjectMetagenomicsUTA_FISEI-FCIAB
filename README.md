@@ -12,31 +12,26 @@ Trabajo de Titulación - Mateo Zurita
 
 ---
 
-## 📋 Tabla de Contenidos
+## Tabla de Contenidos
 
-- [Descripción](#-descripción)
-- [Objetivos](#-objetivos)
-- [Requisitos Previos](#-requisitos-previos)
-- [Instalación](#-instalación)
+- [Descripción](#descripción)
+- [Requisitos Previos](#requisitos-previos)
+- [Instalación](#instalación)
   - [Paso 1: Configuración Inicial](#paso-1-configuración-inicial)
   - [Paso 2: Optimización del Sistema](#paso-2-optimización-del-sistema)
-- [Estructura del Proyecto](#-estructura-del-proyecto)
-- [Preparación de Datos](#-preparación-de-datos)
-- [Uso de Pipelines](#-uso-de-pipelines)
-  - [Pipeline Básico](#pipeline-básico)
-  - [Pipeline con Monitoreo de Recursos](#pipeline-con-monitoreo-de-recursos)
+- [Estructura del Proyecto Metagenómico](#estructura-del-proyecto-metagenómico)
+- [Preparación de Datos](#preparación-de-datos)
+- [Uso de Pipelines](#uso-de-pipelines)
   - [Pipeline Optimizado con Paralelización](#pipeline-optimizado-con-paralelización)
-- [Herramientas Auxiliares](#-herramientas-auxiliares)
-- [Configuración Personalizada](#-configuración-personalizada)
-- [Comparación de Resultados](#-comparación-de-resultados)
-- [Optimizaciones Implementadas](#-optimizaciones-implementadas)
-- [Resultados](#-resultados)
-- [Troubleshooting](#-troubleshooting)
-- [Referencias](#-referencias)
+- [Herramientas Auxiliares](#herramientas-auxiliares)
+- [Configuración Personalizada](#configuración-personalizada)
+- [Optimizaciones Implementadas](#optimizaciones-implementadas)
+- [Troubleshooting](#troubleshooting)
+- [Referencias](#referencias)
 
 ---
 
-## 🔬 Descripción
+## Descripción
 
 Este proyecto presenta una metodología sistemática de optimización para servidores dedicados al análisis bioinformático de datos metagenómicos, específicamente enfocado en el proyecto de investigación **"Estrategias Metagenómicas para caracterización del microbioma intestinal humano aplicado al diagnóstico precoz y tratamiento personalizado de las Enfermedades Inflamatorias Intestinales (EII)"**.
 
@@ -54,7 +49,7 @@ La optimización abarca tres niveles:
 
 ---
 
-## 💻 Requisitos Previos
+## Requisitos Previos
 
 ### Hardware Mínimo Recomendado
 
@@ -78,7 +73,7 @@ La optimización abarca tres niveles:
 
 ---
 
-## 🚀 Instalación
+## Instalación
 
 ### Paso 1: Configuración Inicial
 
@@ -87,6 +82,8 @@ Clone el repositorio y navegue al directorio del proyecto:
 ```bash
 git clone https://github.com/mateozu13/ProjectMetagenomicsUTA_FISEI-FCIAB.git
 cd ProjectMetagenomicsUTA_FISEI-FCIAB
+# Dar permiso de ejecución a los scripts
+chmod +x <script>.sh
 ```
 
 Los scripts de configuración deben ejecutarse en el siguiente orden:
@@ -220,38 +217,7 @@ df -h | grep fast_tmp
 
 ---
 
-## 📁 Estructura del Proyecto
-
-```
-ProjectMetagenomicsUTA_FISEI-FCIAB/
-│
-├── configurations/          # Scripts de instalación
-│   ├── install_conda.sh
-│   ├── install_qiime2.sh
-│   ├── install_tools.sh
-│   └── install_optimization_tools.sh
-│
-├── mods/                   # Scripts de optimización del sistema
-│   ├── tuned_activate_hpc_compute.sh
-│   └── optimize_kernel.sh
-│
-├── pipelines/              # Pipelines de análisis
-│   ├── pipeline1.sh                      # Pipeline básico
-│   ├── pipeline1_stats.sh                # Con monitoreo de recursos
-│   ├── pipeline_optimized_parallel.sh    # Optimizado con paralelización
-│   └── pipeline_optimized_parallel_stats.sh  # Optimizado + monitoreo
-│
-├── tools/                  # Herramientas auxiliares
-│   ├── generate_metadata.sh    # Genera metadata.tsv automáticamente
-│   ├── generate_plots.sh       # Genera gráficos de métricas
-│   └── compare_results.sh      # Compara múltiples proyectos
-│
-├── custom_config_example.sh    # Plantilla de configuración personalizada
-│
-└── README.md
-```
-
-### Estructura de un Proyecto Individual
+## Estructura del Proyecto Metagenómico
 
 ```
 /home/proyecto/<nombre_proyecto>/
@@ -290,7 +256,7 @@ ProjectMetagenomicsUTA_FISEI-FCIAB/
 
 ---
 
-## 🧬 Preparación de Datos
+## Preparación de Datos
 
 ### Estructura de Datos de Entrada
 
@@ -325,7 +291,7 @@ raw_sequences/
 
 ### Generación de Metadata
 
-El archivo `metadata.tsv` es requerido por QIIME2 y se genera automáticamente:
+El archivo `metadata.tsv` es requerido por QIIME2 y se genera de manera automática:
 
 ```bash
 cd tools
@@ -359,76 +325,13 @@ S4	Control
 
 ---
 
-## 🔬 Uso de Pipelines
+## Uso de Pipelines
 
 Todos los pipelines siguen la misma sintaxis básica:
 
 ```bash
 bash <nombre_pipeline>.sh <nombre_proyecto> [config_file]
 ```
-
-### Pipeline Básico
-
-**Archivo**: `pipeline1.sh`
-
-Pipeline estándar sin monitoreo de recursos.
-
-```bash
-cd pipelines
-bash pipeline1.sh Proyecto_EII_2025
-```
-
-**Pasos ejecutados**:
-
-1. Preprocesamiento con fastp (control de calidad)
-2. DADA2 denoising (identificación de ASVs)
-3. Construcción de árboles filogenéticos
-4. Análisis de diversidad alfa y beta
-5. Generación de visualizaciones (.qzv)
-
-**Tiempo estimado**: 2-4 horas (15 muestras)
-
----
-
-### Pipeline con Monitoreo de Recursos
-
-**Archivo**: `pipeline1_stats.sh`
-
-Pipeline con monitoreo completo de recursos computacionales.
-
-```bash
-bash pipeline1_stats.sh Proyecto_EII_2025
-```
-
-**Métricas capturadas**:
-
-- ⏱️ **Tiempo**: Duración por paso y total
-- 💾 **Memoria**: Uso máximo (KB, MB, GB)
-- 🔥 **CPU**: Porcentaje de utilización
-- 💿 **I/O**: Lecturas/escrituras de disco (MB)
-- 🌐 **Red**: Tráfico de red (opcional)
-
-**Archivos generados**:
-
-```
-logs/
-├── pipeline_master.log       # Log consolidado
-├── timing_summary.csv        # Resumen de tiempos
-└── step_*.log               # Log individual por paso
-
-metrics/
-├── system_summary.csv        # Resumen del sistema
-└── resource_*.csv           # Métricas detalladas por paso
-```
-
-**Visualización de resultados**:
-
-```bash
-cd tools
-python3 generate_plots.sh Proyecto_EII_2025
-```
-
----
 
 ### Pipeline Optimizado con Paralelización
 
@@ -442,10 +345,9 @@ bash pipeline_optimized_parallel.sh Proyecto_EII_2025
 
 **Optimizaciones aplicadas**:
 
-- ✅ Procesamiento paralelo de muestras con GNU Parallel
-- ✅ Compresión/descompresión paralela con pigz
-- ✅ Todas las muestras procesadas juntas en DADA2
-- ✅ Uso de tmpfs (`/mnt/fast_tmp`) para archivos temporales
+- Procesamiento paralelo de muestras con GNU Parallel
+- Todas las muestras procesadas en paralelo
+- Uso de tmpfs (`/mnt/fast_tmp`) para archivos temporales
 
 **Variante con estadísticas**:
 
@@ -461,7 +363,7 @@ bash pipeline_optimized_parallel_stats.sh Proyecto_EII_2025
 
 ---
 
-## 🛠️ Herramientas Auxiliares
+## Herramientas Auxiliares
 
 ### 1. Generación de Metadata
 
@@ -543,7 +445,7 @@ bash compare_results.sh Proyecto_Sin_Opt Proyecto_Opt_Kernel Proyecto_Opt_Full
 
 ---
 
-## ⚙️ Configuración Personalizada
+## Configuración Personalizada
 
 Puede personalizar los parámetros del pipeline sin modificar los scripts originales.
 
@@ -564,7 +466,7 @@ nano mi_configuracion.sh
 3. **Ejecute el pipeline con su configuración**:
 
 ```bash
-bash pipeline1_stats.sh Proyecto_20251208 mi_configuracion.sh
+bash <nombre_pipeline>.sh Proyecto_20251208 mi_configuracion.sh
 ```
 
 ### Parámetros Configurables
@@ -603,9 +505,9 @@ PHYLO_THREADS=12               # Hilos para filogenia
 ```bash
 #!/usr/bin/env bash
 
-FASTP_THREADS=6
-DADA2_THREADS=20
-PHYLO_THREADS=20
+FASTP_THREADS=8               # Dividido para 3 (paralelización en 3 hilos)
+DADA2_THREADS=24              # Uso de todos los núcleos disponibles
+PHYLO_THREADS=8               # Dividido para 3 (paralelización en 3 hilos)
 
 SAMPLING_DEPTH=8000
 
@@ -615,46 +517,7 @@ DADA2_TRUNC_LEN_R=230
 
 ---
 
-## 📊 Comparación de Resultados
-
-### Comparación entre Configuraciones
-
-Para comparar diferentes estrategias de optimización:
-
-```bash
-bash tools/compare_results.sh Servidor_Actual_Sin_Opt Servidor_Actual_Opt Servidor_Nuevo_Opt
-```
-
-### Ejemplo de Análisis
-
-```bash
-# 1. Ejecutar pipeline sin optimizaciones
-bash pipeline1_stats.sh Baseline
-
-# 2. Aplicar optimizaciones de kernel
-sudo bash mods/optimize_kernel.sh
-bash pipeline1_stats.sh Kernel_Opt
-
-# 3. Usar pipeline optimizado
-bash pipeline_optimized_parallel_stats.sh Full_Opt
-
-# 4. Comparar resultados
-bash tools/compare_results.sh Baseline Kernel_Opt Full_Opt
-```
-
-### Métricas de Comparación
-
-El script genera:
-
-- **Gráficos de tiempo**: Comparación de duración por paso
-- **Gráficos de memoria**: Uso máximo de RAM
-- **Gráficos de CPU**: Utilización porcentual
-- **Gráficos de I/O**: Velocidad de lectura/escritura
-- **Tabla de mejoras**: Porcentajes de optimización
-
----
-
-## 🚀 Optimizaciones Implementadas
+## Optimizaciones Implementadas
 
 ### Nivel 1: Optimización de Kernel
 
@@ -701,41 +564,7 @@ El script genera:
 
 ---
 
-## 📈 Resultados
-
-### Servidor Actual (12 cores, 32 GB RAM)
-
-| Configuración     | Tiempo Total   | Mejora    |
-| ----------------- | -------------- | --------- |
-| Sin optimizar     | ~8-10 horas    | -         |
-| Kernel optimizado | ~6-7 horas     | 25%       |
-| Full optimizado   | ~35-45 minutos | **92.7%** |
-
-### Servidor Nuevo (24 cores, 64 GB RAM)
-
-| Configuración     | Tiempo Total   | Mejora    |
-| ----------------- | -------------- | --------- |
-| Sin optimizar     | ~4-5 horas     | -         |
-| Kernel optimizado | ~3-3.5 horas   | 30%       |
-| Full optimizado   | ~18-25 minutos | **93.5%** |
-
-### Métricas de Utilización
-
-**Sin optimizar**:
-
-- CPU: 15-25%
-- Memoria: ~8 GB
-- I/O: Secuencial
-
-**Optimizado**:
-
-- CPU: 45-60%
-- Memoria: ~12-16 GB
-- I/O: Paralelo (pigz)
-
----
-
-## 🐛 Troubleshooting
+## Troubleshooting
 
 ### Problema: Error de permisos
 
@@ -851,7 +680,7 @@ sudo mount -t tmpfs -o size=4G tmpfs /mnt/fast_tmp
 
 ---
 
-## 📚 Referencias
+## Referencias
 
 ### Software y Herramientas
 
@@ -878,39 +707,30 @@ sudo mount -t tmpfs -o size=4G tmpfs /mnt/fast_tmp
 
 ---
 
-## 📝 Licencia
+## Licencia
 
 Este proyecto está bajo la Licencia MIT. Ver archivo `LICENSE` para más detalles.
 
 ---
 
-## 👨‍💻 Autor
+## Autor
 
-**Mateo Zurita**  
+**Paulo Mateo Zurita Amores**  
 Universidad Técnica de Ambato  
 Facultad de Ingeniería en Sistemas, Electrónica e Industrial  
-Carrera de Software
+Carrera de Tecnologías de la Información
 
 **Contacto**: [GitHub](https://github.com/mateozu13)
 
 ---
 
-## 🙏 Agradecimientos
-
-- Universidad Técnica de Ambato - FISEI
-- Proyecto de Investigación EII
-- Comunidad QIIME2
-- Comunidad de bioinformática de código abierto
-
----
-
-## 📅 Última Actualización
+## Última Actualización
 
 Diciembre 2025 - Versión 1.0.0
 
 ---
 
-## 🔄 Contribuciones
+## Contribuciones
 
 Las contribuciones son bienvenidas. Por favor:
 
@@ -922,12 +742,12 @@ Las contribuciones son bienvenidas. Por favor:
 
 ---
 
-## 📊 Estado del Proyecto
+## Estado del Proyecto
 
 ![Status](https://img.shields.io/badge/Status-Active-success)
 ![Maintenance](https://img.shields.io/badge/Maintained-Yes-green.svg)
 ![Version](https://img.shields.io/badge/Version-1.0.0-blue.svg)
 
 **Última ejecución exitosa**: Diciembre 2025  
-**Tests pasados**: ✅ Todos  
-**Documentación**: ✅ Completa
+**Tests pasados**: Todos  
+**Documentación**: Completa
