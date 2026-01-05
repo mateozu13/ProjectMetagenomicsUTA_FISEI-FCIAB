@@ -57,13 +57,18 @@ echo ""
 
 echo "[4/5] Optimizando schedulers de I/O..."
 
-for device in /sys/block/sd* /sys/block/vd*; do
+for device in /sys/block/sd* /sys/block/vd* /sys/block/nvme*; do
     if [[ -d "$device" ]]; then
         device_name=$(basename "$device")
-        
+
         if [[ -f "$device/queue/scheduler" ]]; then
-            echo deadline > "$device/queue/scheduler" 2>/dev/null || echo mq-deadline > "$device/queue/scheduler" 2>/dev/null || true
-            echo "    ✓ Scheduler configurado para $device_name"
+            if [[ "$device_name" == nvme* ]]; then
+                echo none > "$device/queue/scheduler" 2>/dev/null || true
+                echo "    ✓ Scheduler 'none' configurado para NVMe: $device_name"
+            else
+                echo deadline > "$device/queue/scheduler" 2>/dev/null || echo mq-deadline > "$device/queue/scheduler" 2>/dev/null || true
+                echo "    ✓ Scheduler 'deadline' configurado para: $device_name"
+            fi
         fi
         
         if [[ -f "$device/queue/read_ahead_kb" ]]; then
