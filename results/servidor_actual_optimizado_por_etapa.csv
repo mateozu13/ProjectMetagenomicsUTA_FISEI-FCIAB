@@ -1,0 +1,14 @@
+step,duration_min,cpu_percent,max_rss_mb,io_total_mb,cpu_min
+fastp_parallel,25.58,318,1307,199.2,81.34
+multiqc_fastp,0.61,93,371,112.8,0.57
+import_Colitis,1.60,105,390,55.0,1.68
+dada2_Colitis,91.01,619,1609,255.2,563.35
+import_Control,1.21,107,392,82.9,1.29
+dada2_Control,107.71,651,1639,88.4,701.19
+import_Crohn,1.23,107,391,43.8,1.32
+dada2_Crohn,94.15,634,1595,99.7,596.91
+phylogeny_parallel,3.08,354,400,12.6,10.90
+merge_tables,1.10,108,400,1.8,1.19
+merge_sequences,1.16,108,397,0.9,1.25
+phylogeny_combined,3.15,305,411,1.7,9.61
+core_metrics,1.71,106,403,29.1,1.81
